@@ -213,8 +213,17 @@ export async function createStudent(consultancyId: string, payload: StudentFormP
     if (error) {
       const errorMsg = await getFunctionErrorMessage(error);
       const isNotFound = error instanceof FunctionsHttpError && error.context.status === 404;
-      const isUnreachable = error instanceof FunctionsFetchError || error instanceof FunctionsRelayError;
-      if (isNotFound || isUnreachable || errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('não encontrada')) {
+      const lowerErrorMsg = errorMsg.toLowerCase();
+      const isUnreachable =
+        error instanceof FunctionsFetchError ||
+        error instanceof FunctionsRelayError ||
+        lowerErrorMsg.includes('failed to send a request to the edge function') ||
+        lowerErrorMsg.includes('failed to send request to the edge function') ||
+        lowerErrorMsg.includes('edge function') ||
+        lowerErrorMsg.includes('function not found') ||
+        lowerErrorMsg.includes('not found');
+
+      if (isNotFound || isUnreachable) {
         return await createLocalStudentFallback(consultancyId, payload);
       }
       throw new Error(errorMsg);
@@ -222,7 +231,14 @@ export async function createStudent(consultancyId: string, payload: StudentFormP
 
     if (data && typeof data === 'object' && 'error' in data) {
       const errorMsg = String((data as { error: unknown }).error);
-      if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('não encontrada')) {
+      const lowerErrorMsg = errorMsg.toLowerCase();
+      if (
+        lowerErrorMsg.includes('failed to send a request to the edge function') ||
+        lowerErrorMsg.includes('failed to send request to the edge function') ||
+        lowerErrorMsg.includes('edge function') ||
+        lowerErrorMsg.includes('function not found') ||
+        lowerErrorMsg.includes('not found')
+      ) {
         return await createLocalStudentFallback(consultancyId, payload);
       }
       throw new Error(errorMsg);
@@ -230,13 +246,15 @@ export async function createStudent(consultancyId: string, payload: StudentFormP
 
     return (data as { student: Student }).student;
   } catch (err: any) {
-    const msg = (err.message ?? '').toLowerCase();
+    const msg = String(err?.message ?? err ?? '').toLowerCase();
     const isNetworkOrNotFound =
-      msg.includes('not found') ||
-      msg.includes('não encontrada') ||
+      msg.includes('failed to send a request to the edge function') ||
+      msg.includes('failed to send request to the edge function') ||
       msg.includes('failed to fetch') ||
       msg.includes('network') ||
       msg.includes('edge function') ||
+      msg.includes('function not found') ||
+      msg.includes('not found') ||
       err instanceof FunctionsFetchError ||
       err instanceof FunctionsRelayError;
 
@@ -309,3 +327,4 @@ export async function updateStudent(studentId: string, payload: StudentFormPaylo
 
   return data as Student;
 }
+

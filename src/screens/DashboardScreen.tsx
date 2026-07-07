@@ -473,8 +473,12 @@ function translateStudentError(error: unknown) {
     return 'A criação do aluno falhou na Edge Function. Confira os dados e os logs do Supabase.';
   }
 
-  if (lowerMessage.includes('failed to send request to the edge function')) {
-    return 'Nao foi possivel falar com a Edge Function. Verifique se ela foi publicada e se os segredos do Supabase estão configurados.';
+  if (
+    lowerMessage.includes('failed to send request to the edge function') ||
+    lowerMessage.includes('failed to send a request to the edge function') ||
+    lowerMessage.includes('failed to reach the edge function')
+  ) {
+    return 'Nao foi possivel falar com a Edge Function. Verifique se ela foi publicada e se os segredos do Supabase estao configurados.';
   }
 
   if (lowerMessage.includes('nao foi possivel alcançar a edge function')) {
@@ -6250,3 +6254,4 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 });
+
