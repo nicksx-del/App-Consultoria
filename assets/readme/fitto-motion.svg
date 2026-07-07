@@ -1,0 +1,112 @@
+<svg width="1600" height="180" viewBox="0 0 1600 180" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fitto motion banner">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#050805"/>
+      <stop offset="50%" stop-color="#0A0F09"/>
+      <stop offset="100%" stop-color="#050805"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1600" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="20%" stop-color="#9CF02E" stop-opacity="0.08"/>
+      <stop offset="50%" stop-color="#9CF02E" stop-opacity="0.8"/>
+      <stop offset="80%" stop-color="#9CF02E" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1240 90) rotate(90) scale(72 72)">
+      <stop offset="0%" stop-color="#B7FF36" stop-opacity="0.95"/>
+      <stop offset="60%" stop-color="#9CF02E" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#9CF02E" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" />
+    </filter>
+    <filter id="softBlur" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" />
+    </filter>
+  </defs>
+
+  <rect width="1600" height="180" rx="24" fill="url(#bg)" />
+
+  <g opacity="0.28">
+    <circle cx="120" cy="50" r="1.6" fill="#9CF02E">
+      <animate attributeName="opacity" values="0.18;0.8;0.18" dur="3.8s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="170" cy="48" r="1.6" fill="#9CF02E">
+      <animate attributeName="opacity" values="0.12;0.78;0.12" dur="4.6s" repeatCount="indefinite" begin="0.4s" />
+    </circle>
+    <circle cx="220" cy="55" r="1.6" fill="#9CF02E">
+      <animate attributeName="opacity" values="0.18;0.75;0.18" dur="4.2s" repeatCount="indefinite" begin="0.8s" />
+    </circle>
+    <circle cx="1320" cy="126" r="1.6" fill="#9CF02E">
+      <animate attributeName="opacity" values="0.16;0.82;0.16" dur="4.4s" repeatCount="indefinite" begin="0.1s" />
+    </circle>
+    <circle cx="1370" cy="130" r="1.6" fill="#9CF02E">
+      <animate attributeName="opacity" values="0.12;0.7;0.12" dur="3.7s" repeatCount="indefinite" begin="0.7s" />
+    </circle>
+    <circle cx="1418" cy="122" r="1.6" fill="#9CF02E">
+      <animate attributeName="opacity" values="0.18;0.76;0.18" dur="4.9s" repeatCount="indefinite" begin="1.2s" />
+    </circle>
+  </g>
+
+  <rect x="60" y="20" width="1480" height="2" rx="1" fill="url(#glow)" filter="url(#softBlur)">
+    <animate attributeName="opacity" values="0.18;0.95;0.18" dur="3.6s" repeatCount="indefinite" />
+  </rect>
+
+  <g filter="url(#blur)">
+    <ellipse cx="320" cy="90" rx="78" ry="20" fill="#9CF02E" opacity="0.22">
+      <animate attributeName="opacity" values="0.08;0.28;0.08" dur="3s" repeatCount="indefinite" />
+    </ellipse>
+    <ellipse cx="1225" cy="90" rx="95" ry="24" fill="#9CF02E" opacity="0.28">
+      <animate attributeName="opacity" values="0.1;0.34;0.1" dur="2.8s" repeatCount="indefinite" begin="0.5s" />
+    </ellipse>
+  </g>
+
+  <circle cx="1240" cy="90" r="58" fill="url(#orb)" opacity="0.75">
+    <animate attributeName="r" values="52;62;52" dur="2.8s" repeatCount="indefinite" />
+    <animate attributeName="opacity" values="0.45;0.9;0.45" dur="2.8s" repeatCount="indefinite" />
+  </circle>
+
+  <g transform="translate(800 90)">
+    <rect x="-168" y="-3" width="336" height="6" rx="3" fill="#0E160D" opacity="0.9" />
+    <rect x="-168" y="-3" width="0" height="6" rx="3" fill="#9CF02E">
+      <animate attributeName="width" values="0;336;0" dur="4.8s" repeatCount="indefinite" />
+      <animate attributeName="x" values="-168;168;-168" dur="4.8s" repeatCount="indefinite" />
+    </rect>
+  </g>
+
+  <g transform="translate(800 90)">
+    <g>
+      <circle cx="-240" cy="0" r="6" fill="#9CF02E">
+        <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" />
+      </circle>
+      <circle cx="0" cy="0" r="6" fill="#9CF02E">
+        <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" begin="0.4s" />
+      </circle>
+      <circle cx="240" cy="0" r="6" fill="#9CF02E">
+        <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" begin="0.8s" />
+      </circle>
+    </g>
+  </g>
+
+  <g opacity="0.9">
+    <path d="M1140 55L1200 25" stroke="#9CF02E" stroke-width="3" stroke-linecap="round">
+      <animate attributeName="opacity" values="0.15;0.95;0.15" dur="2.4s" repeatCount="indefinite" />
+    </path>
+    <path d="M1282 70L1376 22" stroke="#B7FF36" stroke-width="3" stroke-linecap="round">
+      <animate attributeName="opacity" values="0.12;0.9;0.12" dur="2.7s" repeatCount="indefinite" begin="0.7s" />
+    </path>
+    <path d="M1300 122L1405 168" stroke="#9CF02E" stroke-width="3" stroke-linecap="round">
+      <animate attributeName="opacity" values="0.14;0.88;0.14" dur="3.1s" repeatCount="indefinite" begin="0.3s" />
+    </path>
+  </g>
+
+  <text x="800" y="56" text-anchor="middle" fill="#F6F9F2" font-size="20" font-family="Arial, Helvetica, sans-serif" font-weight="700" letter-spacing="4">
+    FITTO EM MOVIMENTO
+    <animate attributeName="opacity" values="0.55;1;0.55" dur="3s" repeatCount="indefinite" />
+  </text>
+
+  <text x="800" y="146" text-anchor="middle" fill="#BFD0B5" font-size="12" font-family="Arial, Helvetica, sans-serif" font-weight="700" letter-spacing="3">
+    ENERGIA, CONSTÂNCIA E EVOLUÇÃO
+    <animate attributeName="opacity" values="0.35;0.9;0.35" dur="4s" repeatCount="indefinite" />
+  </text>
+</svg>

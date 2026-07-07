@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <img src="./assets/readme/fitto-motion.svg" alt="Fitto em movimento" width="100%" />
+</p>
+
+<p align="center">
   <strong>Fitto</strong> é o mentor fitness da consultoria: uma experiência premium para treinador e aluno, com visual marcante e navegação fluida.
 </p>
 
