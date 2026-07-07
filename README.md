@@ -2,10 +2,8 @@
   <img src="./assets/readme/fitto-banner.png" alt="Fitto - Seu Mentor Fitness" width="100%" />
 </p>
 
-<h1 align="center">Aplicativo Consultoria</h1>
-
 <p align="center">
-  Uma experiência premium para consultorias fitness, com visual marcante, navegação fluida e tudo o que treinador e aluno precisam no mesmo lugar.
+  <strong>Fitto</strong> é o mentor fitness da consultoria: uma experiência premium para treinador e aluno, com visual marcante e navegação fluida.
 </p>
 
 <p align="center">
@@ -16,22 +14,13 @@
   <img src="https://img.shields.io/badge/Status-Em%20evolu%C3%A7%C3%A3o-9CF02E?style=for-the-badge" alt="Status" />
 </p>
 
-## O que ele entrega
+## Sobre
 
 O projeto foi pensado para apresentar a consultoria de forma forte e organizada, com foco em experiência visual e uso diário.
 
 - **Para o treinador**: painel com alunos, treino, dieta, check-ins, chat e evolução.
 - **Para o aluno**: acesso claro ao que importa no dia a dia, sem poluição visual.
 - **Para a marca**: uma presença digital com identidade forte e sensação de produto pronto.
-
-## Destaques
-
-- Visual escuro com acento neon e estética de produto premium.
-- Home com entrada por perfil.
-- Dashboard com experiência de consultoria em camadas.
-- Modo demo para apresentar o projeto sem depender de dados reais.
-- Página de download para o APK no web.
-- Fluxo preparado para mobile, web e preview.
 
 ## Galeria
 
@@ -61,6 +50,15 @@ O projeto foi pensado para apresentar a consultoria de forma forte e organizada,
     </td>
   </tr>
 </table>
+
+## Destaques
+
+- Visual escuro com acento neon e estética de produto premium.
+- Home com entrada por perfil.
+- Dashboard com experiência de consultoria em camadas.
+- Modo demo para apresentar o projeto sem depender de dados reais.
+- Página de download para o APK no web.
+- Fluxo preparado para mobile, web e preview.
 
 ## Experiência
 
