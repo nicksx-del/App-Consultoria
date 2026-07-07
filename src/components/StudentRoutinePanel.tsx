@@ -1,0 +1,1 @@
+export { StudentRoutinePanel } from './StudentRoutinePanelImpl';

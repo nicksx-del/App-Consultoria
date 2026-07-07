@@ -1,0 +1,13 @@
+.codex
+.codex-remote-attachments
+.expo
+.vercel
+.env
+.env*.local
+.DS_Store
+node_modules
+dist
+web-build
+artifacts
+*.log
+*.tsbuildinfo
