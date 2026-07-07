@@ -30,14 +30,19 @@ type FeatureCardProps = {
   description: string;
 };
 
+type RolePillProps = {
+  label: string;
+  helper: string;
+  icon: IconName;
+  onPress: () => void;
+};
+
 type ActionButtonProps = {
   label: string;
   icon: ComponentProps<typeof MaterialCommunityIcons>['name'];
   variant: 'primary' | 'secondary' | 'ghost';
   onPress: () => void;
 };
-
-const APK_DOWNLOAD_URL = process.env.EXPO_PUBLIC_APK_DOWNLOAD_URL?.trim() ?? '';
 
 function useAnimatedScale() {
   const scale = useRef(new Animated.Value(1)).current;
@@ -66,6 +71,24 @@ function FeatureCard({ icon, title, description }: FeatureCardProps) {
         <Text style={styles.featureDescription}>{description}</Text>
       </View>
     </View>
+  );
+}
+
+function RolePill({ label, helper, icon, onPress }: RolePillProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.rolePill, pressed && styles.pressedSoft]}
+    >
+      <View style={styles.roleIconShell}>
+        <MaterialCommunityIcons name={icon} size={18} color="#9CF02E" />
+      </View>
+      <View style={styles.roleCopy}>
+        <Text style={styles.roleLabel}>{label}</Text>
+        <Text style={styles.roleHelper}>{helper}</Text>
+      </View>
+      <Feather name="chevron-right" size={16} color="rgba(243, 247, 239, 0.7)" />
+    </Pressable>
   );
 }
 
@@ -164,13 +187,26 @@ export function HomeScreen({ onLoginPress, onSignupPress }: HomeScreenProps) {
                   <Text style={styles.badgeText}>Experiência premium para treinador e aluno</Text>
                 </View>
 
-                <Text style={styles.title}>
-                  Treino, dieta e acompanhamento em um só lugar.
-                </Text>
+                <Text style={styles.title}>Treino, dieta e acompanhamento em um só lugar.</Text>
                 <Text style={styles.subtitle}>
-                  Entre como treinador ou aluno e siga direto para uma experiência feita para uso
-                  diário, clara e profissional.
+                  Escolha seu perfil e siga direto para uma experiência feita para uso diário,
+                  clara e profissional.
                 </Text>
+              </View>
+
+              <View style={styles.rolesRow}>
+                <RolePill
+                  label="Sou treinador"
+                  helper="Criar treinos, dieta e acompanhar alunos"
+                  icon="account-tie-outline"
+                  onPress={() => onLoginPress('trainer')}
+                />
+                <RolePill
+                  label="Sou aluno"
+                  helper="Ver treino, dieta e check-ins do dia"
+                  icon="account-outline"
+                  onPress={() => onLoginPress('student')}
+                />
               </View>
 
               <View style={styles.featureList}>
@@ -324,6 +360,47 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'center',
     maxWidth: 560,
+    fontFamily: 'Sora_400Regular',
+  },
+  rolesRow: {
+    width: '100%',
+    gap: 10,
+  },
+  rolePill: {
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(22, 26, 18, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(146, 255, 68, 0.16)',
+  },
+  roleIconShell: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(156, 240, 46, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+  },
+  roleCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  roleLabel: {
+    color: '#F3F7EF',
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+  },
+  roleHelper: {
+    color: 'rgba(193, 202, 186, 0.74)',
+    fontSize: 12,
+    lineHeight: 17,
     fontFamily: 'Sora_400Regular',
   },
   featureList: {
