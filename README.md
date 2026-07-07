@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/desktop-demo.png" alt="Aplicativo Consultoria - dashboard demo" width="100%" />
+  <img src="./assets/readme/fitto-banner.png" alt="Fitto - Seu Mentor Fitness" width="100%" />
 </p>
 
 <h1 align="center">Aplicativo Consultoria</h1>
