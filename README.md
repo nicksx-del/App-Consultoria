@@ -1,195 +1,115 @@
-# Aplicativo Consultoria
+<p align="center">
+  <img src="./assets/readme/desktop-demo.png" alt="Aplicativo Consultoria - dashboard demo" width="100%" />
+</p>
 
-Aplicativo mobile e web para consultorias fitness, com foco em fluxo de treinador e aluno, acompanhamento de treinos, dieta, check-ins, chat e organização da operação no Supabase.
+<h1 align="center">Aplicativo Consultoria</h1>
 
-## Visão Geral
+<p align="center">
+  Uma experiência premium para consultorias fitness, com visual marcante, navegação fluida e tudo o que treinador e aluno precisam no mesmo lugar.
+</p>
 
-O projeto foi pensado para centralizar a rotina de uma consultoria em um só lugar:
+<p align="center">
+  <img src="https://img.shields.io/badge/Expo-000000?style=for-the-badge&logo=expo&logoColor=white" alt="Expo" />
+  <img src="https://img.shields.io/badge/React%20Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Native" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Supabase-181818?style=for-the-badge&logo=supabase&logoColor=3ECF8E" alt="Supabase" />
+  <img src="https://img.shields.io/badge/Status-Em%20evolu%C3%A7%C3%A3o-9CF02E?style=for-the-badge" alt="Status" />
+</p>
 
-- **Treinador** gerencia alunos, monta treinos e dietas, acompanha check-ins e visualiza evolução.
-- **Aluno** acessa seu painel com treino, dieta, rotina, anamnese, chat e histórico de progresso.
-- **Supabase** atua como backend principal para autenticação, banco de dados, storage e funções.
+## O que ele entrega
 
-O app também oferece:
+O projeto foi pensado para apresentar a consultoria de forma forte e organizada, com foco em experiência visual e uso diário.
 
-- uma **home institucional** para entrada por perfil;
-- uma **página de download** para o APK no web;
-- um **modo demo** para visualizar o dashboard de treinador sem precisar configurar dados reais.
+- **Para o treinador**: painel com alunos, treino, dieta, check-ins, chat e evolução.
+- **Para o aluno**: acesso claro ao que importa no dia a dia, sem poluição visual.
+- **Para a marca**: uma presença digital com identidade forte e sensação de produto pronto.
 
-## Principais Funcionalidades
+## Destaques
 
-- Autenticação com Supabase.
-- Fluxo separado para **treinador** e **aluno**.
-- Cadastro e gestão de consultorias.
-- Montagem e acompanhamento de treino.
-- Prescrição e acompanhamento de dieta.
-- Check-ins com histórico de evolução.
-- Chat entre treinador e aluno.
-- Anamnese do aluno.
-- Tela de download do APK para Android.
-- Suporte a preview web e navegação por rotas especiais.
+- Visual escuro com acento neon e estética de produto premium.
+- Home com entrada por perfil.
+- Dashboard com experiência de consultoria em camadas.
+- Modo demo para apresentar o projeto sem depender de dados reais.
+- Página de download para o APK no web.
+- Fluxo preparado para mobile, web e preview.
 
-## Stack
+## Galeria
 
-- **Expo**
-- **React Native**
-- **TypeScript**
-- **Supabase**
-- **Sora** como família tipográfica principal
+<table>
+  <tr>
+    <td align="center">
+      <img src="./assets/readme/desktop-demo.png" alt="Dashboard demo no desktop" width="100%" />
+      <br />
+      <sub>Dashboard demo no desktop</sub>
+    </td>
+    <td align="center">
+      <img src="./assets/readme/desktop-treino.png" alt="Tela de treino no desktop" width="100%" />
+      <br />
+      <sub>Área de treino no desktop</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="./assets/readme/mobile-home.png" alt="Home no mobile" width="100%" />
+      <br />
+      <sub>Home no mobile</sub>
+    </td>
+    <td align="center">
+      <img src="./assets/readme/mobile-routine.png" alt="Rotina no mobile" width="100%" />
+      <br />
+      <sub>Rotina no mobile</sub>
+    </td>
+  </tr>
+</table>
 
-## Estrutura do Projeto
+## Experiência
 
-```txt
-App-Consultoria/
-├── App.tsx
-├── index.ts
-├── README.md
-├── app.json
-├── vercel.json
-├── assets/
-├── src/
-│   ├── components/
-│   ├── lib/
-│   ├── screens/
-│   └── types/
-└── supabase/
-    ├── *.sql
-    └── functions/
-```
+- **Treino** com visão clara de fichas, execução e acompanhamento.
+- **Dieta** com organização pensada para rotina real.
+- **Check-ins** para manter evolução visível.
+- **Chat** para aproximação entre treinador e aluno.
+- **Anamnese** para registrar contexto e direcionar o atendimento.
 
-## Requisitos
+## Começando
 
-- Node.js compatível com Expo.
-- npm instalado.
-- Conta no Supabase.
-- Banco e storage configurados com os schemas do projeto.
-
-## Instalação
+Se você quiser rodar o projeto localmente:
 
 ```bash
 npm install
-```
-
-## Execução
-
-### Desenvolvimento
-
-```bash
 npm run start
 ```
 
-### Android
-
-```bash
-npm run android
-```
-
-### iOS
-
-```bash
-npm run ios
-```
-
-### Web
+Para abrir no navegador:
 
 ```bash
 npm run web
 ```
 
-### Build para Web
+## O que precisa estar configurado
 
-```bash
-npm run build:web
-```
+- Variáveis `EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` no ambiente.
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` como fallback, se você quiser manter compatibilidade com configurações antigas.
+- Estrutura do Supabase aplicada a partir da pasta `supabase/`.
+- Link do APK em `EXPO_PUBLIC_APK_DOWNLOAD_URL` se você quiser habilitar a página de download.
 
-### Preview do Build Web
+## Links rápidos
 
-```bash
-npm run preview:web
-```
+- **Demo de treinador na web:** `/?demo=trainer`
+- **Página de download:** `/?page=download`
 
-## Variáveis de Ambiente
-
-O app lê variáveis tanto do `app.json` quanto do ambiente de execução.
-
-| Variável | Obrigatória | Uso |
-| --- | --- | --- |
-| `EXPO_PUBLIC_SUPABASE_URL` | Sim | URL do projeto Supabase |
-| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Sim | Chave pública usada pelo cliente |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Opcional | Fallback para autenticação, se necessário |
-| `EXPO_PUBLIC_APK_DOWNLOAD_URL` | Opcional | Link do APK exibido na tela de download |
-
-### Observação importante
-
-Se o Supabase não estiver configurado, o app ainda abre em modo visual/local em partes da experiência, mas as ações reais de login, cadastro e persistência vão depender da configuração correta.
-
-## Supabase
-
-Os arquivos SQL e a function estão em:
-
-- `supabase/auth-schema.sql`
-- `supabase/consultancy-schema.sql`
-- `supabase/students-schema.sql`
-- `supabase/training-schema.sql`
-- `supabase/nutrition-schema.sql`
-- `supabase/chat-schema.sql`
-- `supabase/checkins-schema.sql`
-- `supabase/anamnesis-schema.sql`
-- `supabase/student-profile-schema.sql`
-- `supabase/student-execution-schema.sql`
-- `supabase/chat-enhancements-schema.sql`
-- `supabase/checkins-video-schema.sql`
-- `supabase/cardio-execution-schema.sql`
-- `supabase/functions/create-student/index.ts`
-
-### O que você precisa aplicar
-
-1. Criar o projeto no Supabase.
-2. Aplicar os SQLs na ordem necessária para liberar auth, consultoria, alunos, treinos, dieta, chat, check-ins e anamnese.
-3. Publicar a Edge Function `create-student`.
-4. Garantir os buckets e policies usados pelo app.
-
-## Fluxos Especiais
-
-### Modo Demo
-
-Na web, você pode abrir o dashboard demo de treinador com:
+## Estrutura visual do projeto
 
 ```txt
-/?demo=trainer
+App-Consultoria/
+├── assets/
+│   └── readme/
+├── src/
+├── supabase/
+├── App.tsx
+├── index.ts
+└── app.json
 ```
 
-Esse modo mostra uma visão ilustrativa do painel sem depender de dados reais.
+## Observação
 
-### Página de Download
-
-Na web, você pode abrir a tela de download com:
-
-```txt
-/?page=download
-```
-
-Essa página foi pensada para apontar para o APK quando a variável `EXPO_PUBLIC_APK_DOWNLOAD_URL` estiver definida.
-
-## Scripts Disponíveis
-
-| Script | Comando |
-| --- | --- |
-| Iniciar o app | `npm run start` |
-| Abrir no Android | `npm run android` |
-| Abrir no iOS | `npm run ios` |
-| Abrir no navegador | `npm run web` |
-| Gerar build web | `npm run build:web` |
-| Servir build web | `npm run preview:web` |
-
-## Observações de Uso
-
-- O app usa uma navegação baseada em estado dentro de `App.tsx`.
-- O fluxo de login diferencia **treinador** e **aluno**.
-- Alunos normalmente são criados dentro da rotina do treinador.
-- Algumas áreas do dashboard dependem diretamente do schema do Supabase e podem exigir migrações e policies corretas.
-- A experiência visual usa a fonte **Sora** e foi desenhada para funcionar em mobile e web.
-
-## Licença
-
-Consulte o arquivo `LICENSE` para os termos de uso do projeto.
+Esse README foi montado para funcionar mais como apresentação do produto do que como documentação técnica pesada. A ideia é que ele passe valor rapidamente para quem cai no repositório pela primeira vez.
