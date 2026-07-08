@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -111,7 +112,127 @@ function ActionButton({ label, icon, variant, onPress }: ActionButtonProps) {
   );
 }
 
+function FeatureStat({
+  value,
+  label,
+  icon,
+}: {
+  value: string;
+  label: string;
+  icon: IconName;
+}) {
+  return (
+    <View style={styles.featureStat}>
+      <View style={styles.featureStatIcon}>
+        <MaterialCommunityIcons name={icon} size={15} color="#9CF02E" />
+      </View>
+      <Text style={styles.featureStatValue}>{value}</Text>
+      <Text style={styles.featureStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function PreviewMetric({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent: string;
+}) {
+  return (
+    <View style={styles.previewMetric}>
+      <Text style={[styles.previewMetricValue, { color: accent }]}>{value}</Text>
+      <Text style={styles.previewMetricLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function ProgressBar({ value }: { value: number }) {
+  return (
+    <View style={styles.progressTrack}>
+      <View style={[styles.progressFill, { width: `${value}%` }]} />
+    </View>
+  );
+}
+
+function PreviewPanel() {
+  return (
+    <View style={styles.previewPanel}>
+      <LinearGradient
+        colors={['rgba(177, 255, 42, 0.12)', 'rgba(88, 233, 118, 0.04)', 'rgba(6, 8, 6, 0.0)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.previewGlow}
+      />
+
+      <View style={styles.previewHeader}>
+        <View>
+          <Text style={styles.previewEyebrow}>Visão da experiência</Text>
+          <Text style={styles.previewTitle}>Tudo pronto para o treino do dia</Text>
+        </View>
+        <View style={styles.previewStatusPill}>
+          <View style={styles.previewStatusDot} />
+          <Text style={styles.previewStatusText}>Online</Text>
+        </View>
+      </View>
+
+      <View style={styles.previewCard}>
+        <View style={styles.previewCardTop}>
+          <View style={styles.previewAvatar}>
+            <MaterialCommunityIcons name="chart-timeline-variant" size={18} color="#07110B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.previewCardLabel}>Sessão recomendada</Text>
+            <Text style={styles.previewCardTitle}>Treino de força + mobilidade</Text>
+          </View>
+        </View>
+
+        <View style={styles.previewChecks}>
+          <View style={styles.previewCheckRow}>
+            <Feather name="check-circle" size={14} color="#9CF02E" />
+            <Text style={styles.previewCheckText}>Treino liberado</Text>
+          </View>
+          <View style={styles.previewCheckRow}>
+            <Feather name="check-circle" size={14} color="#9CF02E" />
+            <Text style={styles.previewCheckText}>Dieta sincronizada</Text>
+          </View>
+          <View style={styles.previewCheckRow}>
+            <Feather name="check-circle" size={14} color="#9CF02E" />
+            <Text style={styles.previewCheckText}>Progresso atualizado</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.previewRow}>
+        <PreviewMetric label="Aderência" value="94%" accent="#B1FF2A" />
+        <PreviewMetric label="Check-ins" value="+18" accent="#58E976" />
+        <PreviewMetric label="Hoje" value="7/7" accent="#EAF8E4" />
+      </View>
+
+      <View style={styles.previewInsight}>
+        <View style={styles.previewInsightHeader}>
+          <Text style={styles.previewInsightTitle}>Resumo rápido</Text>
+          <Text style={styles.previewInsightValue}>+12% esta semana</Text>
+        </View>
+        <View style={styles.miniChart}>
+          <View style={[styles.chartBar, { height: 18 }]} />
+          <View style={[styles.chartBar, { height: 34 }]} />
+          <View style={[styles.chartBar, { height: 26 }]} />
+          <View style={[styles.chartBar, { height: 46 }]} />
+          <View style={[styles.chartBar, { height: 30 }]} />
+          <View style={[styles.chartBar, { height: 52 }]} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export function HomeScreen({ onLoginPress, onSignupPress }: HomeScreenProps) {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 960;
+
   const features = [
     {
       icon: 'dumbbell',
@@ -139,87 +260,128 @@ export function HomeScreen({ onLoginPress, onSignupPress }: HomeScreenProps) {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <View style={styles.centerWrap}>
-          <View style={styles.card}>
+        <View style={styles.pageWrap}>
+          <View style={[styles.card, isWide && styles.cardWide]}>
             <LinearGradient
-              colors={['rgba(177, 255, 42, 0.12)', 'rgba(88, 233, 118, 0.0)']}
+              colors={['rgba(177, 255, 42, 0.18)', 'rgba(88, 233, 118, 0.02)', 'rgba(0, 0, 0, 0)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.cardGlow}
             />
 
-            <View style={styles.cardInner}>
-              <BrandMark
-                size="lg"
-                subtitle="Consultoria fitness mobile"
-                titleStyle={styles.brandTitle}
-                subtitleStyle={styles.brandSubtitle}
-                containerStyle={styles.brandWrap}
-                logoShellStyle={styles.brandLogoShell}
-              />
+            <View style={[styles.cardInner, isWide && styles.cardInnerWide]}>
+              <View style={[styles.heroColumn, isWide && styles.heroColumnWide]}>
+                <BrandMark
+                  size="lg"
+                  align="left"
+                  subtitle="Consultoria fitness mobile"
+                  titleStyle={styles.brandTitle}
+                  subtitleStyle={styles.brandSubtitle}
+                  containerStyle={styles.brandWrap}
+                  logoShellStyle={styles.brandLogoShell}
+                />
 
-              <View style={styles.heroCopy}>
-                <View style={styles.badge}>
-                  <Feather name="zap" size={12} color="#9CF02E" />
-                  <Text style={styles.badgeText}>Experiência premium para treinador e aluno</Text>
+                <View style={styles.heroCopy}>
+                  <View style={styles.heroTopline}>
+                    <View style={styles.heroDot} />
+                    <Text style={styles.heroToplineText}>
+                      Tela inicial reformulada para ficar mais clara e sofisticada
+                    </Text>
+                  </View>
+
+                  <Text style={styles.title}>Treino, dieta e acompanhamento em um só lugar.</Text>
+                  <Text style={styles.subtitle}>
+                    Entre como treinador ou aluno e siga direto para uma experiência feita para uso
+                    diário, clara e profissional.
+                  </Text>
                 </View>
 
-                <Text style={styles.title}>
-                  Treino, dieta e acompanhamento em um só lugar.
-                </Text>
-                <Text style={styles.subtitle}>
-                  Entre como treinador ou aluno e siga direto para uma experiência feita para uso
-                  diário, clara e profissional.
-                </Text>
-              </View>
+                <View style={styles.featureStatsRow}>
+                  <FeatureStat value="1 painel" label="para gestão" icon="view-dashboard-outline" />
+                  <FeatureStat value="3 fluxos" label="em um app" icon="account-group-outline" />
+                  <FeatureStat value="100%" label="mobile first" icon="cellphone" />
+                </View>
 
-              <View style={styles.featureList}>
-                {features.map((item) => (
-                  <FeatureCard
-                    key={item.title}
-                    icon={item.icon}
-                    title={item.title}
-                    description={item.description}
+                <View style={styles.featureList}>
+                  {features.map((item) => (
+                    <FeatureCard
+                      key={item.title}
+                      icon={item.icon}
+                      title={item.title}
+                      description={item.description}
+                    />
+                  ))}
+                </View>
+
+                <View style={styles.actions}>
+                  <ActionButton
+                    label="Entrar como treinador"
+                    icon="account-tie-outline"
+                    variant="primary"
+                    onPress={() => onLoginPress('trainer')}
                   />
-                ))}
+                  <ActionButton
+                    label="Entrar como aluno"
+                    icon="account-outline"
+                    variant="secondary"
+                    onPress={() => onLoginPress('student')}
+                  />
+                  <ActionButton
+                    label="Baixar APK"
+                    icon="download-outline"
+                    variant="ghost"
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        window.location.href = APK_DOWNLOAD_URL || '/?page=download';
+                      }
+                    }}
+                  />
+                  <ActionButton
+                    label="Criar conta de treinador"
+                    icon="account-plus-outline"
+                    variant="ghost"
+                    onPress={() => onSignupPress('trainer')}
+                  />
+                </View>
+
+                <View style={styles.supportStrip}>
+                  <View style={styles.supportItem}>
+                    <Text style={styles.supportLabel}>Fluxo</Text>
+                    <Text style={styles.supportValue}>Treinador cria, aluno acompanha</Text>
+                  </View>
+                  <View style={styles.supportDivider} />
+                  <View style={styles.supportItem}>
+                    <Text style={styles.supportLabel}>Tempo</Text>
+                    <Text style={styles.supportValue}>Entrada rápida, sem ruído visual</Text>
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.actions}>
-                <ActionButton
-                  label="Entrar como treinador"
-                  icon="account-tie-outline"
-                  variant="primary"
-                  onPress={() => onLoginPress('trainer')}
-                />
-                <ActionButton
-                  label="Entrar como aluno"
-                  icon="account-outline"
-                  variant="secondary"
-                  onPress={() => onLoginPress('student')}
-                />
-                <ActionButton
-                  label="Baixar APK"
-                  icon="download-outline"
-                  variant="ghost"
-                  onPress={() => {
-                    if (Platform.OS === 'web') {
-                      window.location.href = '/?page=download';
-                    }
-                  }}
-                />
-                <ActionButton
-                  label="Criar conta de treinador"
-                  icon="account-plus-outline"
-                  variant="ghost"
-                  onPress={() => onSignupPress('trainer')}
-                />
-              </View>
+              <View style={[styles.previewColumn, isWide && styles.previewColumnWide]}>
+                <PreviewPanel />
 
-              <View style={styles.footerNote}>
-                <Feather name="info" size={13} color="#9CF02E" />
-                <Text style={styles.footerText}>
-                  Contas de aluno são criadas pelo treinador no fluxo de gestão.
-                </Text>
+                <View style={styles.detailRail}>
+                  <View style={styles.detailBand}>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Acesso</Text>
+                      <Text style={styles.detailValue}>Rápido e direto</Text>
+                    </View>
+                    <View style={styles.detailDivider} />
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Foco</Text>
+                      <Text style={styles.detailValue}>Treino e acompanhamento</Text>
+                    </View>
+                  </View>
+                  <View style={styles.previewMicroCard}>
+                    <View style={styles.previewMicroHeader}>
+                      <Text style={styles.previewMicroTitle}>Fluxo pensado para o dia a dia</Text>
+                      <MaterialCommunityIcons name="arrow-top-right" size={14} color="#9CF02E" />
+                    </View>
+                    <Text style={styles.previewMicroText}>
+                      Tela inicial com leitura rápida, menos blocos competindo e ações mais evidentes.
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
           </View>
@@ -237,39 +399,64 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  centerWrap: {
+  pageWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 18,
-    paddingVertical: 24,
+    paddingVertical: 28,
   },
   card: {
     width: '100%',
-    maxWidth: 640,
-    borderRadius: 30,
+    maxWidth: 840,
+    borderRadius: 38,
     borderWidth: 1,
-    borderColor: 'rgba(180, 255, 133, 0.12)',
-    backgroundColor: 'rgba(8, 11, 8, 0.86)',
+    borderColor: 'rgba(180, 255, 133, 0.14)',
+    backgroundColor: 'rgba(7, 10, 8, 0.9)',
     overflow: 'hidden',
-    boxShadow: '0 24px 60px rgba(0, 0, 0, 0.6)',
+    boxShadow: '0 28px 80px rgba(0, 0, 0, 0.68)',
     shadowColor: '#000',
-    shadowOpacity: 0.6,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 18 },
-    elevation: 12,
+    shadowOpacity: 0.62,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 20 },
+    elevation: 14,
+  },
+  cardWide: {
+    maxWidth: 1180,
   },
   cardGlow: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 180,
+    top: -20,
+    left: -20,
+    right: -20,
+    height: 260,
   },
   cardInner: {
-    paddingHorizontal: 22,
-    paddingVertical: 26,
-    gap: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
+    gap: 22,
+  },
+  cardInnerWide: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 28,
+    paddingHorizontal: 28,
+    paddingVertical: 28,
+  },
+  heroColumn: {
+    gap: 18,
+  },
+  heroColumnWide: {
+    flex: 1.08,
+    minWidth: 0,
+  },
+  previewColumn: {
+    gap: 14,
+  },
+  previewColumnWide: {
+    flex: 0.92,
+    minWidth: 0,
+    paddingTop: 4,
   },
   brandWrap: {
     gap: 10,
@@ -288,10 +475,9 @@ const styles = StyleSheet.create({
   },
   heroCopy: {
     gap: 14,
-    alignItems: 'center',
   },
-  badge: {
-    alignSelf: 'center',
+  heroTopline: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -302,7 +488,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(156, 240, 46, 0.18)',
   },
-  badgeText: {
+  heroDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.34,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  heroToplineText: {
     color: '#C9E9B0',
     fontSize: 11,
     fontFamily: 'Sora_600SemiBold',
@@ -311,20 +507,60 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#F3F7EF',
-    fontSize: 30,
-    lineHeight: 35,
-    textAlign: 'center',
+    fontSize: 36,
+    lineHeight: 42,
+    textAlign: 'left',
     fontFamily: 'Sora_800ExtraBold',
-    letterSpacing: -0.4,
-    maxWidth: 560,
+    letterSpacing: -0.6,
+    maxWidth: 610,
   },
   subtitle: {
     color: '#C1CABA',
     fontSize: 15,
     lineHeight: 24,
-    textAlign: 'center',
-    maxWidth: 560,
+    textAlign: 'left',
+    maxWidth: 610,
     fontFamily: 'Sora_400Regular',
+  },
+  featureStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  featureStat: {
+    flexGrow: 1,
+    flexBasis: 128,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 8,
+  },
+  featureStatIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(156, 240, 46, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+  },
+  featureStatValue: {
+    color: '#F3F7EF',
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: 'Sora_700Bold',
+  },
+  featureStatLabel: {
+    color: 'rgba(193, 202, 186, 0.8)',
+    fontSize: 11,
+    lineHeight: 15,
+    fontFamily: 'Sora_500Medium',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   featureList: {
     gap: 12,
@@ -336,7 +572,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
@@ -422,15 +658,308 @@ const styles = StyleSheet.create({
   ghostButtonText: {
     color: '#DFF7C9',
   },
-  footerNote: {
+  supportStrip: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingTop: 2,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  footerText: {
+  supportItem: {
     flex: 1,
-    color: 'rgba(193, 202, 186, 0.76)',
+    flexBasis: 180,
+    gap: 4,
+  },
+  supportLabel: {
+    color: 'rgba(193, 202, 186, 0.68)',
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: 'Sora_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+  },
+  supportValue: {
+    color: '#F3F7EF',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Sora_600SemiBold',
+  },
+  supportDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  previewPanel: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 28,
+    padding: 18,
+    backgroundColor: 'rgba(10, 12, 10, 0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(180, 255, 133, 0.12)',
+    gap: 14,
+  },
+  previewGlow: {
+    position: 'absolute',
+    top: -50,
+    right: -20,
+    width: 260,
+    height: 220,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  previewEyebrow: {
+    color: 'rgba(201, 233, 176, 0.7)',
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: 'Sora_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  previewTitle: {
+    marginTop: 5,
+    color: '#F3F7EF',
+    fontSize: 20,
+    lineHeight: 24,
+    fontFamily: 'Sora_700Bold',
+    letterSpacing: -0.2,
+  },
+  previewStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(156, 240, 46, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.15)',
+  },
+  previewStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  previewStatusText: {
+    color: '#EAF8E4',
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+  },
+  previewCard: {
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 14,
+  },
+  previewCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  previewAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#9CF02E',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  previewCardLabel: {
+    color: 'rgba(193, 202, 186, 0.74)',
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: 'Sora_500Medium',
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+  },
+  previewCardTitle: {
+    marginTop: 4,
+    color: '#F3F7EF',
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: 'Sora_700Bold',
+  },
+  previewChecks: {
+    gap: 8,
+  },
+  previewCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewCheckText: {
+    color: '#EAF8E4',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Sora_500Medium',
+  },
+  previewRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  previewMetric: {
+    flexGrow: 1,
+    flexBasis: 96,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  previewMetricValue: {
+    fontSize: 19,
+    lineHeight: 23,
+    fontFamily: 'Sora_800ExtraBold',
+    letterSpacing: -0.2,
+  },
+  previewMetricLabel: {
+    marginTop: 4,
+    color: 'rgba(193, 202, 186, 0.74)',
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: 'Sora_500Medium',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  previewInsight: {
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 14,
+  },
+  previewInsightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  previewInsightTitle: {
+    color: '#F3F7EF',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: 'Sora_700Bold',
+  },
+  previewInsightValue: {
+    color: '#9CF02E',
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+  },
+  miniChart: {
+    height: 92,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+  },
+  chartBar: {
+    flex: 1,
+    borderRadius: 999,
+    backgroundColor: 'rgba(156, 240, 46, 0.84)',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  detailBand: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  detailRail: {
+    gap: 10,
+  },
+  detailItem: {
+    flex: 1,
+    gap: 4,
+  },
+  detailDivider: {
+    width: 1,
+    marginHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  detailLabel: {
+    color: 'rgba(193, 202, 186, 0.68)',
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: 'Sora_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+  },
+  detailValue: {
+    color: '#F3F7EF',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Sora_600SemiBold',
+  },
+  previewMicroCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 22,
+    backgroundColor: 'rgba(156, 240, 46, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+    gap: 8,
+  },
+  previewMicroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  previewMicroTitle: {
+    flex: 1,
+    color: '#F3F7EF',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Sora_700Bold',
+  },
+  previewMicroText: {
+    color: 'rgba(193, 202, 186, 0.8)',
     fontSize: 12,
     lineHeight: 18,
     fontFamily: 'Sora_400Regular',

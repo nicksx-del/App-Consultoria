@@ -72,7 +72,6 @@ export function BrandMark({
 
       <View style={[styles.copy, centered && styles.centerCopy]}>
         <Text
-          numberOfLines={1}
           style={[
             styles.title,
             {

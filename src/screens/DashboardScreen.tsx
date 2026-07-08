@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -47,11 +47,20 @@ import {
   buildDefaultTrainingPlan,
   fetchStudentTrainingPlan,
   saveStudentTrainingPlan,
+  weekdayLabels,
+  weekdayOrder,
 } from '../lib/training';
 import {
   buildDefaultNutritionPlan,
+  buildInitialFoodLibrary,
+  createEmptyLibraryItem,
   fetchStudentNutritionPlan,
+  fetchNutritionFoodLibrary,
+  loadLocalNutritionFoodLibrary,
+  saveLocalNutritionFoodLibrary,
+  saveNutritionFoodLibrary,
   saveStudentNutritionPlan,
+  nutritionWeekdayLabels,
 } from '../lib/nutrition';
 import {
   fetchStudentChatMessages,
@@ -65,9 +74,11 @@ import {
 } from '../lib/checkins';
 import {
   fetchStudentCardioLogs,
+  fetchLocalStudentMealLogs,
   fetchStudentMealLogs,
   fetchStudentWorkoutSessions,
   finishStudentWorkoutSession,
+  saveLocalStudentMealLog,
   saveStudentCardioLog,
   saveStudentMealLog,
   saveStudentWorkoutSession as saveStudentWorkoutSessionRecord,
@@ -94,7 +105,12 @@ import type {
   TrainingExperience,
 } from '../types/student';
 import type { StudentTrainingPlan } from '../types/training';
-import type { NutritionMeal, NutritionPhase, StudentNutritionPlan } from '../types/nutrition';
+import type {
+  NutritionLibraryItem,
+  NutritionMeal,
+  NutritionPhase,
+  StudentNutritionPlan,
+} from '../types/nutrition';
 import type { ChatMessage, SendChatMessagePayload } from '../types/chat';
 import type { ReviewCheckInPayload, StudentCheckIn, SubmitCheckInPayload } from '../types/checkin';
 import type { SaveAnamnesisPayload, StudentAnamnesis } from '../types/anamnesis';
@@ -107,6 +123,58 @@ type DashboardScreenProps = {
   loading?: boolean;
   onLogout: () => void;
 };
+
+class NutritionViewErrorBoundary extends Component<
+  { children: ReactNode; resetKey: string },
+  { errorMessage: string | null }
+> {
+  state = {
+    errorMessage: null,
+  };
+
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      errorMessage: error instanceof Error ? error.message : 'Erro inesperado ao abrir a dieta.',
+    };
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error('Nutrition view crashed', error, info);
+  }
+
+  componentDidUpdate(prevProps: Readonly<{ children: ReactNode; resetKey: string }>) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.errorMessage) {
+      this.setState({ errorMessage: null });
+    }
+  }
+
+  render() {
+    if (this.state.errorMessage) {
+      return (
+        <View
+          style={{
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: 'rgba(248, 113, 113, 0.28)',
+            backgroundColor: 'rgba(25, 8, 8, 0.92)',
+            padding: 20,
+            gap: 10,
+          }}
+        >
+          <Text style={{ color: '#FCA5A5', fontSize: 13, fontWeight: '700' }}>Erro ao abrir a dieta</Text>
+          <Text style={{ color: '#F3F4F6', fontSize: 22, fontWeight: '800' }}>
+            A tela de dieta encontrou um erro de renderização.
+          </Text>
+          <Text style={{ color: 'rgba(243, 244, 246, 0.84)', fontSize: 14, lineHeight: 21 }}>
+            {this.state.errorMessage}
+          </Text>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 type WorkspaceSection = 'overview' | 'students' | 'notifications' | 'payments' | 'ia';
@@ -326,7 +394,7 @@ const studentProfileTabs: StudentProfileTabMeta[] = [
 ];
 
 const primaryStudentTabs: StudentBottomTab[] = [
-  { id: 'profile', tab: 'profile', icon: 'account-edit-outline', label: 'Perfil' },
+  { id: 'summary', tab: 'summary', icon: 'view-dashboard-outline', label: 'Resumo' },
   { id: 'training', tab: 'training', icon: 'dumbbell', label: 'Treino' },
   { id: 'nutrition', tab: 'nutrition', icon: 'food-apple-outline', label: 'Dieta' },
   { id: 'routine', tab: 'routine', icon: 'calendar-check-outline', label: 'Rotina' },
@@ -432,6 +500,96 @@ function formatMetric(value: number | null, suffix = '') {
   return `${value.toLocaleString('pt-BR')}${suffix}`;
 }
 
+function formatList(items: string[]) {
+  const filtered = items.filter(Boolean);
+  return filtered.length ? filtered.join(' / ') : 'Ainda em ajuste';
+}
+
+function buildTrainingPreview(plan: StudentTrainingPlan) {
+  if (!plan) {
+    return {
+      title: 'Treino ainda não definido',
+      subtitle: 'Abra a aba Treino para montar a primeira ficha.',
+      stats: ['Sem treino salvo', 'Aguardando rotina'],
+      notes: ['Cardio e progressão pendentes'],
+    };
+  }
+
+  const workoutDays = plan.workoutDays.length;
+  const exerciseCount = plan.workoutDays.reduce((total, day) => total + day.exercises.length, 0);
+  const activeWeekdays = weekdayOrder.filter((weekday) => Boolean(plan.weeklySchedule[weekday]?.workoutDayId));
+  const firstWorkoutDay = plan.workoutDays[0];
+
+  return {
+    title: firstWorkoutDay?.name ?? 'Treino organizado',
+    subtitle: firstWorkoutDay?.subtitle ?? 'Seu plano já está pronto para começar.',
+    stats: [
+      `${workoutDays} dias de treino`,
+      `${exerciseCount} exercícios`,
+      `${plan.cardioConfig.weeklyMinutes} min cardio/sem`,
+    ],
+    notes: [
+      activeWeekdays.length ? `Agenda: ${formatList(activeWeekdays.map((weekday) => weekdayLabels[weekday]))}` : 'Agenda semanal ainda não definida',
+      plan.cardioConfig.notes?.trim() || 'Sem observações de cardio por enquanto',
+    ],
+  };
+}
+
+function buildNutritionPreview(plan: StudentNutritionPlan | null) {
+  if (!plan) {
+    return {
+      title: 'Dieta ainda não definida',
+      subtitle: 'Abra a aba Dieta para estruturar refeições e macros.',
+      stats: ['Sem dieta salva', 'Aguardando ajuste'],
+      notes: ['Cardápio e macros pendentes'],
+    };
+  }
+
+  const firstPhase = plan.phases[0];
+  const mealCount = plan.meals.length;
+  const mealDays = Array.from(new Set(plan.meals.map((meal) => meal.weekday)));
+
+  return {
+    title: firstPhase?.name ?? plan.config.protocolName ?? 'Plano alimentar',
+    subtitle: firstPhase?.subtitle ?? plan.config.coachNotes?.trim() ?? 'Seu plano alimentar está pronto para seguir.',
+    stats: [
+      firstPhase ? `${firstPhase.calories} kcal` : 'Calorias em ajuste',
+      firstPhase ? `${firstPhase.protein}g P / ${firstPhase.carbs}g C / ${firstPhase.fat}g G` : `${mealCount} refeições`,
+      mealDays.length ? `${mealDays.length} dias com refeições` : 'Sem dias definidos',
+    ],
+    notes: [
+      mealDays.length ? `Dias: ${formatList(mealDays.map((weekday) => nutritionWeekdayLabels[weekday]))}` : 'Dias de refeição ainda não organizados',
+      firstPhase ? `Cardio: ${firstPhase.cardioMinutes} min` : 'Cardio da dieta ainda não foi definido',
+    ],
+  };
+}
+
+function getTrainingPreview(plan: StudentTrainingPlan | null, fallbackPlan: StudentTrainingPlan) {
+  if (plan) {
+    return buildTrainingPreview(plan);
+  }
+
+  const preview = buildTrainingPreview(fallbackPlan);
+  return {
+    ...preview,
+    subtitle: 'Preview padrao. O treinador ainda nao salvou um treino oficial para esta conta.',
+    notes: ['Assim que o treino oficial for salvo, ele aparece aqui.', ...preview.notes],
+  };
+}
+
+function getNutritionPreview(plan: StudentNutritionPlan | null, fallbackPlan: StudentNutritionPlan) {
+  if (plan) {
+    return buildNutritionPreview(plan);
+  }
+
+  const preview = buildNutritionPreview(fallbackPlan);
+  return {
+    ...preview,
+    subtitle: 'Preview padrao. O treinador ainda nao salvou uma dieta oficial para esta conta.',
+    notes: ['Assim que a dieta oficial for salva, ela aparece aqui.', ...preview.notes],
+  };
+}
+
 function getStudentTabMeta(tab: StudentProfileTab) {
   return studentProfileTabs.find((item) => item.id === tab) ?? studentProfileTabs[0];
 }
@@ -483,6 +641,26 @@ function translateStudentError(error: unknown) {
 
   if (lowerMessage.includes('nao foi possivel alcançar a edge function')) {
     return 'Nao foi possivel alcançar a Edge Function. Verifique a publicação no Supabase.';
+  }
+
+  if (message === 'OWN_STUDENT_NOT_FOUND') {
+    return 'Nao encontramos um cadastro de aluno vinculado a esta conta. Peca ao treinador para revisar o acesso.';
+  }
+
+  if (message === 'OWN_STUDENT_AMBIGUOUS') {
+    return 'Existe mais de um cadastro de aluno com este e-mail. O treinador precisa corrigir o vinculo no Supabase.';
+  }
+
+  if (message === 'OWN_STUDENT_LINKED_TO_ANOTHER_ACCOUNT') {
+    return 'Este cadastro de aluno ja esta vinculado a outra conta. O treinador precisa corrigir o vinculo no Supabase.';
+  }
+
+  if (message === 'OWN_STUDENT_EMAIL_NOT_FOUND') {
+    return 'Nao foi possivel confirmar o e-mail desta conta para localizar seu cadastro de aluno.';
+  }
+
+  if (message === 'OWN_STUDENT_LINK_UPDATE_FAILED') {
+    return 'Nao foi possivel religar automaticamente este cadastro de aluno. Revise o vinculo no Supabase.';
   }
 
   return message;
@@ -666,6 +844,25 @@ function isNutritionFallbackError(error: unknown) {
   );
 }
 
+function isNutritionLibraryFallbackError(error: unknown) {
+  const message =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : '';
+  const lowerMessage = message.toLowerCase();
+
+  return (
+    lowerMessage.includes('nutrition_food_library') ||
+    lowerMessage.includes('row-level security') ||
+    lowerMessage.includes('policy') ||
+    lowerMessage.includes('permission denied') ||
+    lowerMessage.includes('failed to fetch') ||
+    lowerMessage.includes('network request failed')
+  );
+}
+
 function isAnamnesisTableMissing(error: unknown) {
   const message =
     typeof error === 'string'
@@ -712,6 +909,10 @@ function translateNutritionError(error: unknown) {
 
   if (lowerMessage.includes('student_nutrition_plans') && lowerMessage.includes('does not exist')) {
     return 'A tabela de dietas ainda nao existe. Aplique o SQL supabase/nutrition-schema.sql.';
+  }
+
+  if (lowerMessage.includes('nutrition_food_library') && lowerMessage.includes('does not exist')) {
+    return 'A tabela da biblioteca de alimentos ainda nao existe. O app segue usando a base pronta local no preview.';
   }
 
   if (lowerMessage.includes('row-level security') || lowerMessage.includes('policy')) {
@@ -2020,6 +2221,7 @@ function StudentsPage({
 function StudentProfilePage({
   student,
   tab,
+  isTrainerView,
   canEdit,
   studentSaving,
   trainingPlan,
@@ -2039,9 +2241,12 @@ function StudentProfilePage({
   anamnesisSaving,
   anamnesisError,
   nutritionPlan,
+  nutritionLibrary,
   nutritionLoading,
   nutritionSaving,
+  nutritionLibrarySaving,
   nutritionError,
+  nutritionLibraryError,
   mealLogs,
   mealLogsLoading,
   mealLogSaving,
@@ -2057,6 +2262,7 @@ function StudentProfilePage({
   chatError,
   onBack,
   onEdit,
+  onCloseEditor,
   onChangeTab,
   onSaveTrainingPlan,
   onStartWorkoutSession,
@@ -2067,6 +2273,7 @@ function StudentProfilePage({
   onRefreshCardioLogs,
   onSaveAnamnesis,
   onSaveNutritionPlan,
+  onSaveNutritionLibrary,
   onChangeMealLogDate,
   onSaveMealLog,
   onRefreshMealLogs,
@@ -2081,6 +2288,7 @@ function StudentProfilePage({
 }: {
   student: Student;
   tab: StudentProfileTab;
+  isTrainerView: boolean;
   canEdit: boolean;
   studentSaving: boolean;
   trainingPlan: StudentTrainingPlan | null;
@@ -2100,9 +2308,12 @@ function StudentProfilePage({
   anamnesisSaving: boolean;
   anamnesisError?: string | null;
   nutritionPlan: StudentNutritionPlan | null;
+  nutritionLibrary: NutritionLibraryItem[];
   nutritionLoading: boolean;
   nutritionSaving: boolean;
+  nutritionLibrarySaving: boolean;
   nutritionError?: string | null;
+  nutritionLibraryError?: string | null;
   mealLogs: StudentMealLog[];
   mealLogsLoading: boolean;
   mealLogSaving: boolean;
@@ -2118,6 +2329,7 @@ function StudentProfilePage({
   chatError?: string | null;
   onBack?: () => void;
   onEdit?: () => void;
+  onCloseEditor?: () => void;
   onChangeTab: (tab: StudentProfileTab) => void;
   onSaveTrainingPlan: (plan: StudentTrainingPlan) => Promise<void> | void;
   onStartWorkoutSession: (workoutDay: WorkoutDay) => Promise<StudentWorkoutSession | void> | StudentWorkoutSession | void;
@@ -2128,6 +2340,7 @@ function StudentProfilePage({
   onRefreshCardioLogs: () => Promise<void> | void;
   onSaveAnamnesis: (payload: SaveAnamnesisPayload) => Promise<StudentAnamnesis | void> | StudentAnamnesis | void;
   onSaveNutritionPlan: (plan: StudentNutritionPlan) => Promise<void> | void;
+  onSaveNutritionLibrary: (items: NutritionLibraryItem[]) => Promise<NutritionLibraryItem[] | void> | NutritionLibraryItem[] | void;
   onChangeMealLogDate: (date: string) => void;
   onSaveMealLog: (payload: SaveMealLogPayload) => Promise<StudentMealLog | void> | StudentMealLog | void;
   onRefreshMealLogs: () => Promise<void> | void;
@@ -2145,7 +2358,9 @@ function StudentProfilePage({
   const normalizedTab = tab === 'data' ? 'summary' : tab;
   const activeTab = getStudentTabMeta(normalizedTab);
   const showStudentProfileHero = normalizedTab === 'summary';
-  const showProfileContextCard = profile.role === 'trainer' && normalizedTab !== 'summary';
+  const showProfileContextCard = isTrainerView && normalizedTab !== 'summary';
+  const trainingPreview = getTrainingPreview(trainingPlan, buildDefaultTrainingPlan(student));
+  const nutritionPreview = getNutritionPreview(nutritionPlan, buildDefaultNutritionPlan(student));
 
   return (
     <View style={styles.pageStack}>
@@ -2223,6 +2438,7 @@ function StudentProfilePage({
             canEdit={canEdit}
             errorMessage={canEdit ? null : 'Somente o aluno ou o treinador podem editar este perfil.'}
             saving={studentSaving}
+            onEditLater={onCloseEditor}
             onSave={onSaveStudentProfile}
           />
         ) : normalizedTab === 'summary' ? (
@@ -2231,9 +2447,37 @@ function StudentProfilePage({
               <View style={styles.sectionHeader}>
                 <View>
                   <Text style={styles.sectionKicker}>Resumo</Text>
-                  <Text style={styles.sectionTitle}>Base inicial do aluno</Text>
+                  <Text style={styles.sectionTitle}>Seu ponto de partida</Text>
                 </View>
               </View>
+
+              <View style={styles.planPreviewGrid}>
+                <PlanPreviewCard
+                  icon="dumbbell"
+                  eyebrow={trainingPlan ? 'Treino para seguir' : 'Preview de treino'}
+                  title={trainingPreview.title}
+                  subtitle={trainingPreview.subtitle}
+                  stats={trainingPreview.stats}
+                  notes={trainingPreview.notes}
+                  actionLabel="Abrir treino"
+                  onAction={() => onChangeTab('training')}
+                  loading={trainingLoading}
+                />
+                <PlanPreviewCard
+                  icon="food-apple-outline"
+                  eyebrow={nutritionPlan ? 'Dieta do aluno' : 'Preview de dieta'}
+                  title={nutritionPreview.title}
+                  subtitle={nutritionPreview.subtitle}
+                  stats={nutritionPreview.stats}
+                  notes={nutritionPreview.notes}
+                  actionLabel="Abrir dieta"
+                  onAction={() => onChangeTab('nutrition')}
+                  loading={nutritionLoading}
+                />
+              </View>
+
+              {trainingError ? <ErrorNotice message={trainingError} /> : null}
+              {nutritionError ? <ErrorNotice message={nutritionError} /> : null}
 
               <View style={styles.infoGrid}>
                 <InfoTile icon="calendar" label="Idade" value={student.age ? `${student.age} anos` : 'Não informado'} />
@@ -2247,6 +2491,21 @@ function StudentProfilePage({
               <View style={styles.notePanel}>
                 <Text style={styles.noteTitle}>Restrições e observações</Text>
                 <Text style={styles.noteText}>{student.restrictions || 'Nenhuma restrição informada ainda.'}</Text>
+              </View>
+
+              <View style={styles.summaryActionRow}>
+                <Pressable onPress={() => onChangeTab('checkins')} style={({ pressed }) => [styles.summaryAction, pressed && styles.pressed]}>
+                  <MaterialCommunityIcons name="clipboard-check-outline" size={16} color="#9CF02E" />
+                  <Text style={styles.summaryActionText}>Check-ins</Text>
+                </Pressable>
+                <Pressable onPress={() => onChangeTab('anamnesis')} style={({ pressed }) => [styles.summaryAction, pressed && styles.pressed]}>
+                  <MaterialCommunityIcons name="clipboard-text-outline" size={16} color="#9CF02E" />
+                  <Text style={styles.summaryActionText}>Anamnese</Text>
+                </Pressable>
+                <Pressable onPress={() => onChangeTab('chat')} style={({ pressed }) => [styles.summaryAction, pressed && styles.pressed]}>
+                  <MaterialCommunityIcons name="message-text-outline" size={16} color="#9CF02E" />
+                  <Text style={styles.summaryActionText}>Chat</Text>
+                </Pressable>
               </View>
             </View>
 
@@ -2279,11 +2538,11 @@ function StudentProfilePage({
             loading={anamnesisLoading}
             saving={anamnesisSaving}
             errorMessage={anamnesisError}
-            canEdit={profile.role === 'student' || canEdit}
+            canEdit={!isTrainerView || canEdit}
             onSave={onSaveAnamnesis}
           />
         ) : normalizedTab === 'training' ? (
-          profile.role === 'student' ? (
+          !isTrainerView ? (
             <StudentWorkoutRunner
               student={student}
               plan={trainingPlan}
@@ -2314,30 +2573,39 @@ function StudentProfilePage({
             />
           )
         ) : normalizedTab === 'nutrition' ? (
-          profile.role === 'student' ? (
-            <StudentNutritionTracker
-              student={student}
-              plan={nutritionPlan}
-              mealLogs={mealLogs}
-              logDate={mealLogDate}
-              loading={nutritionLoading || mealLogsLoading}
-              saving={nutritionSaving || mealLogSaving}
-              errorMessage={mealLogError || nutritionError}
-              onChangeLogDate={onChangeMealLogDate}
-              onSaveMealLog={onSaveMealLog}
-              onRefresh={onRefreshMealLogs}
-            />
+          !isTrainerView ? (
+            <NutritionViewErrorBoundary resetKey={`${student.id}:${normalizedTab}:student`}>
+              <StudentNutritionTracker
+                student={student}
+                plan={nutritionPlan}
+                foodLibrary={nutritionLibrary}
+                mealLogs={mealLogs}
+                logDate={mealLogDate}
+                loading={nutritionLoading || mealLogsLoading}
+                saving={nutritionSaving || mealLogSaving}
+                errorMessage={mealLogError || nutritionError}
+                onChangeLogDate={onChangeMealLogDate}
+                onSaveMealLog={onSaveMealLog}
+                onRefresh={onRefreshMealLogs}
+              />
+            </NutritionViewErrorBoundary>
           ) : (
-            <NutritionBuilder
-              plan={nutritionPlan}
-              studentName={student.full_name}
-              studentGoal={student.goal}
-              loading={nutritionLoading}
-              saving={nutritionSaving}
-              errorMessage={nutritionError}
-              canEdit={canEdit}
-              onSave={onSaveNutritionPlan}
-            />
+            <NutritionViewErrorBoundary resetKey={`${student.id}:${normalizedTab}:trainer`}>
+              <NutritionBuilder
+                plan={nutritionPlan}
+                foodLibrary={nutritionLibrary}
+                studentName={student.full_name}
+                studentGoal={student.goal}
+                loading={nutritionLoading}
+                saving={nutritionSaving || nutritionLibrarySaving}
+                errorMessage={nutritionError || nutritionLibraryError}
+                canEdit={canEdit}
+                mealLogs={mealLogs}
+                mealLogDate={mealLogDate}
+                onSaveLibrary={onSaveNutritionLibrary}
+                onSave={onSaveNutritionPlan}
+              />
+            </NutritionViewErrorBoundary>
           )
         ) : normalizedTab === 'checkins' ? (
           <CheckInPanel
@@ -2347,8 +2615,8 @@ function StudentProfilePage({
             loading={checkInsLoading}
             saving={checkInSaving}
             errorMessage={checkInError}
-            canSubmit={profile.role === 'trainer' || student.auth_user_id === profile.id}
-            canReview={profile.role === 'trainer'}
+            canSubmit={isTrainerView || student.auth_user_id === profile.id}
+            canReview={isTrainerView}
             onSubmit={onSubmitCheckIn}
             onReview={onReviewCheckIn}
             onRefresh={onRefreshCheckIns}
@@ -2363,7 +2631,7 @@ function StudentProfilePage({
             loading={chatLoading}
             sending={chatSending}
             errorMessage={chatError}
-            canSend={profile.role === 'trainer' || student.auth_user_id === profile.id}
+            canSend={isTrainerView || student.auth_user_id === profile.id}
             onSend={onSendChatMessage}
             onToggleStar={onToggleChatMessageStar}
             onRefresh={onRefreshChat}
@@ -2813,12 +3081,70 @@ function InfoTile({ icon, label, value }: { icon: IconName; label: string; value
   );
 }
 
+function PlanPreviewCard({
+  icon,
+  eyebrow,
+  title,
+  subtitle,
+  stats,
+  notes,
+  actionLabel,
+  onAction,
+  loading,
+}: {
+  icon: IconName;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  stats: string[];
+  notes: string[];
+  actionLabel: string;
+  onAction: () => void;
+  loading: boolean;
+}) {
+  return (
+    <View style={styles.planPreviewCard}>
+      <View style={styles.planPreviewTopRow}>
+        <View style={styles.planPreviewIcon}>
+          <MaterialCommunityIcons name={icon} size={19} color="#061007" />
+        </View>
+        <Text style={styles.planPreviewEyebrow}>{eyebrow}</Text>
+      </View>
+
+      <Text style={styles.planPreviewTitle}>{loading ? 'Carregando...' : title}</Text>
+      <Text style={styles.planPreviewSubtitle}>{loading ? 'Sincronizando os dados do aluno.' : subtitle}</Text>
+
+      <View style={styles.planPreviewStats}>
+        {stats.map((stat) => (
+          <View key={stat} style={styles.planPreviewStatPill}>
+            <Text style={styles.planPreviewStatText}>{stat}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.planPreviewNotes}>
+        {notes.map((note) => (
+          <View key={note} style={styles.planPreviewNoteRow}>
+            <View style={styles.planPreviewDot} />
+            <Text style={styles.planPreviewNoteText}>{note}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Pressable onPress={onAction} style={({ pressed }) => [styles.planPreviewButton, pressed && styles.pressed]}>
+        <Text style={styles.planPreviewButtonText}>{actionLabel}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function DashboardScreen({
   profile,
   consultancy,
   loading = false,
   onLogout,
 }: DashboardScreenProps) {
+  const dashboardScrollRef = useRef<ScrollView>(null);
   const [activeSection, setActiveSection] = useState<WorkspaceSection>('overview');
   const [showMoreTabs, setShowMoreTabs] = useState(false);
   const [showStudentMoreTabs, setShowStudentMoreTabs] = useState(false);
@@ -2851,6 +3177,9 @@ export function DashboardScreen({
   const [nutritionLoading, setNutritionLoading] = useState(false);
   const [nutritionSaving, setNutritionSaving] = useState(false);
   const [nutritionError, setNutritionError] = useState<string | null>(null);
+  const [nutritionLibrary, setNutritionLibrary] = useState<NutritionLibraryItem[]>([]);
+  const [nutritionLibrarySaving, setNutritionLibrarySaving] = useState(false);
+  const [nutritionLibraryError, setNutritionLibraryError] = useState<string | null>(null);
   const [mealLogs, setMealLogs] = useState<StudentMealLog[]>([]);
   const [mealLogsLoading, setMealLogsLoading] = useState(false);
   const [mealLogSaving, setMealLogSaving] = useState(false);
@@ -2993,7 +3322,7 @@ export function DashboardScreen({
         setStudents([localPreviewStudent]);
         setOwnStudent(isTrainer ? null : localPreviewStudent);
         setSelectedStudent(isTrainer ? localPreviewStudent : null);
-        setStudentProfileTab(isTrainer ? 'summary' : 'profile');
+        setStudentProfileTab('summary');
         setActiveSection('students');
         setTrainingPlan(buildDefaultTrainingPlan(localPreviewStudent));
         setNutritionPlan(localNutritionPlan ?? buildDefaultNutritionPlan(localPreviewStudent));
@@ -3048,12 +3377,21 @@ export function DashboardScreen({
           current ? trainerStudents.find((student) => student.id === current.id) ?? null : null,
         );
       } else {
+        setOwnStudent(null);
+        setTrainingPlan(null);
+        setNutritionPlan(null);
+        setWorkoutSessions([]);
+        setMealLogs([]);
+        setCardioLogs([]);
+        setCheckIns([]);
+        setChatMessages([]);
         const student = await fetchOwnStudent(profile.id);
         setOwnStudent(student);
-        setStudentProfileTab('profile');
+        setStudentProfileTab('summary');
         setActiveSection('students');
       }
     } catch (error) {
+      setOwnStudent(null);
       setStudentError(translateStudentError(error));
     } finally {
       setStudentsLoading(false);
@@ -3086,9 +3424,9 @@ export function DashboardScreen({
 
     try {
       const currentPlan = await fetchStudentTrainingPlan(student);
-      setTrainingPlan(currentPlan ?? buildDefaultTrainingPlan(student));
+      setTrainingPlan(currentPlan ?? (isTrainer ? buildDefaultTrainingPlan(student) : null));
     } catch (error) {
-      setTrainingPlan(buildDefaultTrainingPlan(student));
+      setTrainingPlan(null);
       setTrainingError(translateTrainingError(error));
     } finally {
       setTrainingLoading(false);
@@ -3122,14 +3460,14 @@ export function DashboardScreen({
 
     try {
       const currentPlan = await fetchStudentNutritionPlan(student);
-      setNutritionPlan(currentPlan ?? buildDefaultNutritionPlan(student));
+      setNutritionPlan(currentPlan ?? (isTrainer ? buildDefaultNutritionPlan(student) : null));
     } catch (error) {
       if (isNutritionFallbackError(error)) {
         const localPlan = await loadLocalNutritionPlan(student);
         setNutritionPlan(localPlan ?? buildDefaultNutritionPlan(student));
         setNutritionError(null);
       } else {
-        setNutritionPlan(buildDefaultNutritionPlan(student));
+        setNutritionPlan(null);
         setNutritionError(translateNutritionError(error));
       }
     } finally {
@@ -3139,6 +3477,39 @@ export function DashboardScreen({
 
   useEffect(() => {
     void loadNutritionPlan(profileStudent);
+  }, [profileStudent?.id, isTrainer]);
+
+  const loadNutritionLibrary = async (student: Student | null) => {
+    if (!student) {
+      setNutritionLibrary([]);
+      setNutritionLibraryError(null);
+      return;
+    }
+
+    setNutritionLibraryError(null);
+
+    try {
+      if (!isSupabaseConfigured) {
+        const localLibrary = await loadLocalNutritionFoodLibrary(student);
+        setNutritionLibrary(localLibrary.length ? localLibrary : buildInitialFoodLibrary(student.trainer_id, student.consultancy_id));
+        return;
+      }
+
+      const currentLibrary = await fetchNutritionFoodLibrary(student);
+      setNutritionLibrary(
+        currentLibrary.length ? currentLibrary : buildInitialFoodLibrary(student.trainer_id, student.consultancy_id),
+      );
+    } catch (error) {
+      const localLibrary = await loadLocalNutritionFoodLibrary(student);
+      setNutritionLibrary(
+        localLibrary.length ? localLibrary : buildInitialFoodLibrary(student.trainer_id, student.consultancy_id),
+      );
+      setNutritionLibraryError(isNutritionLibraryFallbackError(error) ? null : translateNutritionError(error));
+    }
+  };
+
+  useEffect(() => {
+    void loadNutritionLibrary(profileStudent);
   }, [profileStudent?.id, isTrainer]);
 
   const handleSaveTrainingPlan = async (nextPlan: StudentTrainingPlan) => {
@@ -3617,6 +3988,35 @@ export function DashboardScreen({
     }
   };
 
+  const handleSaveNutritionLibrary = async (nextLibrary: NutritionLibraryItem[]) => {
+    if (!profileStudent) {
+      setNutritionLibraryError('Abra o perfil de um aluno antes de salvar a biblioteca.');
+      return;
+    }
+
+    setNutritionLibrarySaving(true);
+    setNutritionLibraryError(null);
+
+    try {
+      if (!isSupabaseConfigured) {
+        const localLibrary = await saveLocalNutritionFoodLibrary(profileStudent, nextLibrary);
+        setNutritionLibrary(localLibrary);
+        return localLibrary;
+      }
+
+      const savedLibrary = await saveNutritionFoodLibrary(profileStudent, nextLibrary);
+      setNutritionLibrary(savedLibrary);
+      return savedLibrary;
+    } catch (error) {
+      const localLibrary = await saveLocalNutritionFoodLibrary(profileStudent, nextLibrary);
+      setNutritionLibrary(localLibrary);
+      setNutritionLibraryError(isNutritionLibraryFallbackError(error) ? null : translateNutritionError(error));
+      return localLibrary;
+    } finally {
+      setNutritionLibrarySaving(false);
+    }
+  };
+
   const loadMealLogs = async (student: Student | null, date = mealLogDate) => {
     if (!student) {
       setMealLogs([]);
@@ -3629,8 +4029,9 @@ export function DashboardScreen({
     }
 
     if (!isSupabaseConfigured) {
-      setMealLogs([]);
-      setMealLogError('Configure o Supabase para carregar registros da dieta.');
+      const localLogs = await fetchLocalStudentMealLogs(student, date);
+      setMealLogs(localLogs);
+      setMealLogError(null);
       return;
     }
 
@@ -3641,8 +4042,9 @@ export function DashboardScreen({
       const currentLogs = await fetchStudentMealLogs(student, date);
       setMealLogs(currentLogs);
     } catch (error) {
-      setMealLogs([]);
-      setMealLogError(translateNutritionError(error));
+      const localLogs = await fetchLocalStudentMealLogs(student, date);
+      setMealLogs(localLogs);
+      setMealLogError(localLogs.length ? null : translateNutritionError(error));
     } finally {
       setMealLogsLoading(false);
     }
@@ -3667,8 +4069,13 @@ export function DashboardScreen({
     }
 
     if (!isSupabaseConfigured) {
-      setMealLogError('Configure o Supabase para salvar registros da dieta.');
-      return;
+      const savedLog = await saveLocalStudentMealLog({
+        student: profileStudent,
+        payload,
+      });
+      setMealLogs((current) => [savedLog, ...current.filter((item) => item.id !== savedLog.id)]);
+      setMealLogError(null);
+      return savedLog;
     }
 
     setMealLogSaving(true);
@@ -3682,8 +4089,13 @@ export function DashboardScreen({
       setMealLogs((current) => [savedLog, ...current.filter((item) => item.id !== savedLog.id)]);
       return savedLog;
     } catch (error) {
+      const savedLog = await saveLocalStudentMealLog({
+        student: profileStudent,
+        payload,
+      });
+      setMealLogs((current) => [savedLog, ...current.filter((item) => item.id !== savedLog.id)]);
       setMealLogError(translateNutritionError(error));
-      throw error;
+      return savedLog;
     } finally {
       setMealLogSaving(false);
     }
@@ -3895,7 +4307,7 @@ export function DashboardScreen({
 
   const handleOpenStudent = (student: Student) => {
     setSelectedStudent(student);
-    setStudentProfileTab(student.auth_user_id === profile.id ? 'profile' : 'summary');
+    setStudentProfileTab('summary');
     setActiveSection('students');
     setShowMoreTabs(false);
     setShowStudentMoreTabs(false);
@@ -3965,7 +4377,7 @@ export function DashboardScreen({
     }
   };
 
-  const handleSaveStudentProfile = async (payload: StudentProfilePayload) => {
+  const handleSaveStudentProfile = async (payload: StudentProfilePayload): Promise<void> => {
     const targetStudent = selectedStudent ?? ownStudent;
 
     if (!targetStudent) {
@@ -4001,7 +4413,7 @@ export function DashboardScreen({
           setOwnStudent(nextStudent);
         }
 
-        return nextStudent;
+        return;
       }
 
       const updatedStudent = await updateStudentProfileRecord(targetStudent.id, payload);
@@ -4015,7 +4427,7 @@ export function DashboardScreen({
         setOwnStudent(updatedStudent);
       }
 
-      return updatedStudent;
+      return;
     } catch (error) {
       setStudentError(translateStudentError(error));
       throw error;
@@ -4214,6 +4626,7 @@ export function DashboardScreen({
         <StudentProfilePage
           student={selectedStudent}
           tab={studentProfileTab}
+          isTrainerView
           canEdit
           studentSaving={studentSaving}
           trainingPlan={trainingPlan}
@@ -4233,9 +4646,12 @@ export function DashboardScreen({
           anamnesisSaving={anamnesisSaving}
           anamnesisError={anamnesisError}
           nutritionPlan={nutritionPlan}
+          nutritionLibrary={nutritionLibrary}
           nutritionLoading={nutritionLoading}
           nutritionSaving={nutritionSaving}
+          nutritionLibrarySaving={nutritionLibrarySaving}
           nutritionError={nutritionError}
+          nutritionLibraryError={nutritionLibraryError}
           mealLogs={mealLogs}
           mealLogsLoading={mealLogsLoading}
           mealLogSaving={mealLogSaving}
@@ -4254,6 +4670,12 @@ export function DashboardScreen({
             setShowStudentMoreTabs(false);
           }}
           onEdit={() => setFormMode('edit')}
+          onCloseEditor={() => {
+            setStudentProfileTab('summary');
+            requestAnimationFrame(() => {
+              dashboardScrollRef.current?.scrollTo({ y: 0, animated: true });
+            });
+          }}
           onChangeTab={handleStudentTabSelect}
           onSaveTrainingPlan={handleSaveTrainingPlan}
           onStartWorkoutSession={handleStartWorkoutSession}
@@ -4264,6 +4686,7 @@ export function DashboardScreen({
           onRefreshCardioLogs={() => loadCardioLogs(profileStudent)}
           onSaveAnamnesis={handleSaveAnamnesis}
           onSaveNutritionPlan={handleSaveNutritionPlan}
+          onSaveNutritionLibrary={handleSaveNutritionLibrary}
           onChangeMealLogDate={handleChangeMealLogDate}
           onSaveMealLog={handleSaveMealLog}
           onRefreshMealLogs={() => loadMealLogs(profileStudent, mealLogDate)}
@@ -4327,6 +4750,7 @@ export function DashboardScreen({
       <StudentProfilePage
         student={ownStudent}
         tab={studentProfileTab}
+        isTrainerView={false}
         canEdit={profile.role === 'trainer' || ownStudent?.auth_user_id === profile.id}
         studentSaving={studentSaving}
         trainingPlan={trainingPlan}
@@ -4346,9 +4770,12 @@ export function DashboardScreen({
         anamnesisSaving={anamnesisSaving}
         anamnesisError={anamnesisError}
         nutritionPlan={nutritionPlan}
+        nutritionLibrary={nutritionLibrary}
         nutritionLoading={nutritionLoading}
         nutritionSaving={nutritionSaving}
+        nutritionLibrarySaving={nutritionLibrarySaving}
         nutritionError={nutritionError}
+        nutritionLibraryError={nutritionLibraryError}
         mealLogs={mealLogs}
         mealLogsLoading={mealLogsLoading}
         mealLogSaving={mealLogSaving}
@@ -4362,6 +4789,12 @@ export function DashboardScreen({
         chatLoading={chatLoading}
         chatSending={chatSending}
         chatError={chatError}
+        onCloseEditor={() => {
+          setStudentProfileTab('summary');
+          requestAnimationFrame(() => {
+            dashboardScrollRef.current?.scrollTo({ y: 0, animated: true });
+          });
+        }}
         onChangeTab={handleStudentTabSelect}
         onSaveTrainingPlan={handleSaveTrainingPlan}
         onStartWorkoutSession={handleStartWorkoutSession}
@@ -4372,6 +4805,7 @@ export function DashboardScreen({
         onRefreshCardioLogs={() => loadCardioLogs(profileStudent)}
         onSaveAnamnesis={handleSaveAnamnesis}
         onSaveNutritionPlan={handleSaveNutritionPlan}
+        onSaveNutritionLibrary={handleSaveNutritionLibrary}
         onChangeMealLogDate={handleChangeMealLogDate}
         onSaveMealLog={handleSaveMealLog}
         onRefreshMealLogs={() => loadMealLogs(profileStudent, mealLogDate)}
@@ -4392,6 +4826,7 @@ export function DashboardScreen({
       <AuthBackground />
 
       <ScrollView
+        ref={dashboardScrollRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
@@ -5538,6 +5973,107 @@ const styles = StyleSheet.create({
   profileTabStack: {
     gap: 14,
   },
+  planPreviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  planPreviewCard: {
+    flexGrow: 1,
+    flexBasis: 260,
+    gap: 10,
+    padding: 14,
+    borderRadius: 24,
+    backgroundColor: 'rgba(8, 12, 8, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.14)',
+  },
+  planPreviewTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  planPreviewIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#9CF02E',
+  },
+  planPreviewEyebrow: {
+    flex: 1,
+    color: '#DFFFBA',
+    fontSize: 10,
+    fontFamily: 'Sora_800ExtraBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  planPreviewTitle: {
+    color: '#F3F7EF',
+    fontSize: 16,
+    fontFamily: 'Sora_800ExtraBold',
+    letterSpacing: -0.25,
+  },
+  planPreviewSubtitle: {
+    color: 'rgba(222, 236, 214, 0.7)',
+    fontSize: 11,
+    lineHeight: 17,
+    fontFamily: 'Sora_400Regular',
+  },
+  planPreviewStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  planPreviewStatPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(156, 240, 46, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+  },
+  planPreviewStatText: {
+    color: '#DFFFBA',
+    fontSize: 10,
+    fontFamily: 'Sora_700Bold',
+  },
+  planPreviewNotes: {
+    gap: 8,
+  },
+  planPreviewNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  planPreviewDot: {
+    width: 6,
+    height: 6,
+    marginTop: 5,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+  },
+  planPreviewNoteText: {
+    flex: 1,
+    color: 'rgba(222, 236, 214, 0.66)',
+    fontSize: 10,
+    lineHeight: 16,
+    fontFamily: 'Sora_400Regular',
+  },
+  planPreviewButton: {
+    minHeight: 40,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+  },
+  planPreviewButtonText: {
+    color: '#061007',
+    fontSize: 11,
+    fontFamily: 'Sora_800ExtraBold',
+  },
   infoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -5588,6 +6124,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     fontFamily: 'Sora_400Regular',
+  },
+  summaryActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+  },
+  summaryAction: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.14)',
+  },
+  summaryActionText: {
+    color: '#DFFFBA',
+    fontSize: 11,
+    fontFamily: 'Sora_800ExtraBold',
   },
   studentModule: {
     gap: 12,

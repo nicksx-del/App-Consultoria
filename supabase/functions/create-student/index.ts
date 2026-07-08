@@ -18,6 +18,9 @@ type StudentPayload = {
   restrictions?: string;
 };
 
+const studentSelect =
+  "id, trainer_id, consultancy_id, auth_user_id, full_name, email, whatsapp, age, sex, height_cm, weight_kg, goal, activity_level, experience, restrictions, display_name, username, headline, bio, location, instagram_url, website_url, avatar_path, avatar_url, cover_path, cover_url, status, created_at, updated_at";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -37,6 +40,41 @@ function jsonResponse(body: unknown, status = 200) {
       "Content-Type": "application/json",
     },
   });
+}
+
+function extractErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const candidate = error as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+      code?: unknown;
+    };
+
+    const parts = [candidate.message, candidate.details, candidate.hint, candidate.code]
+      .filter((value) => typeof value === "string" && value.trim().length > 0)
+      .map((value) => String(value));
+
+    if (parts.length) {
+      return parts.join(" | ");
+    }
+  }
+
+  return typeof error === "string" ? error : "Não foi possível salvar o aluno.";
+}
+
+function isDuplicateError(error: unknown) {
+  const message = extractErrorMessage(error).toLowerCase();
+  return (
+    message.includes("already registered") ||
+    message.includes("duplicate") ||
+    message.includes("unique") ||
+    message.includes("23505")
+  );
 }
 
 function getSecretKey() {
@@ -273,7 +311,7 @@ Deno.serve(async (req: Request) => {
 
     authUserId = authData.user.id;
 
-    await adminClient
+    const { error: profileUpsertError } = await adminClient
       .from("profiles")
       .upsert(
         {
@@ -284,29 +322,58 @@ Deno.serve(async (req: Request) => {
         { onConflict: "id" },
       );
 
-    const { data: student, error: studentError } = await adminClient
+    if (profileUpsertError) {
+      throw profileUpsertError;
+    }
+
+    const { data: existingStudent, error: existingStudentError } = await adminClient
       .from("students")
-      .insert({
-        trainer_id: user.id,
-        consultancy_id: consultancy.id,
-        auth_user_id: authUserId,
-        full_name: input.fullName,
-        display_name: input.fullName,
-        email: input.email,
-        whatsapp: input.whatsapp,
-        age: input.age,
-        sex: input.sex,
-        height_cm: input.heightCm,
-        weight_kg: input.weightKg,
-        goal: input.goal,
-        activity_level: input.activityLevel,
-        experience: input.experience,
-        restrictions: input.restrictions,
-      })
-      .select(
-        "id, trainer_id, consultancy_id, auth_user_id, full_name, email, whatsapp, age, sex, height_cm, weight_kg, goal, activity_level, experience, restrictions, display_name, username, headline, bio, location, instagram_url, website_url, avatar_path, avatar_url, cover_path, cover_url, status, created_at, updated_at",
-      )
-      .single();
+      .select(studentSelect)
+      .eq("trainer_id", user.id)
+      .eq("consultancy_id", consultancy.id)
+      .ilike("email", input.email)
+      .maybeSingle();
+
+    if (existingStudentError) {
+      throw existingStudentError;
+    }
+
+    const studentPayload = {
+      trainer_id: user.id,
+      consultancy_id: consultancy.id,
+      auth_user_id: authUserId,
+      full_name: input.fullName,
+      display_name: input.fullName,
+      email: input.email,
+      whatsapp: input.whatsapp,
+      age: input.age,
+      sex: input.sex,
+      height_cm: input.heightCm,
+      weight_kg: input.weightKg,
+      goal: input.goal,
+      activity_level: input.activityLevel,
+      experience: input.experience,
+      restrictions: input.restrictions,
+    };
+
+    if (existingStudent?.auth_user_id && existingStudent.auth_user_id !== authUserId) {
+      return jsonResponse({ error: "Ja existe um aluno com este e-mail vinculado a outra conta." }, 409);
+    }
+
+    const studentQuery = existingStudent
+      ? adminClient
+          .from("students")
+          .update(studentPayload)
+          .eq("id", existingStudent.id)
+          .select(studentSelect)
+          .single()
+      : adminClient
+          .from("students")
+          .insert(studentPayload)
+          .select(studentSelect)
+          .single();
+
+    const { data: student, error: studentError } = await studentQuery;
 
     if (studentError) {
       throw studentError;
@@ -318,7 +385,11 @@ Deno.serve(async (req: Request) => {
       await adminClient.auth.admin.deleteUser(authUserId).catch(() => undefined);
     }
 
-    const message = error instanceof Error ? error.message : "Não foi possível salvar o aluno.";
+    if (isDuplicateError(error)) {
+      return jsonResponse({ error: "Já existe um aluno com este e-mail." }, 409);
+    }
+
+    const message = extractErrorMessage(error);
     return jsonResponse({ error: message }, 400);
   }
 });
