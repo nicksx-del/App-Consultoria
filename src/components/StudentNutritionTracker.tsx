@@ -12,12 +12,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import {
+  buildFoodSubstitution,
   calculateDayTotals,
   calculateMealTotals,
   getActivePhase,
   nutritionWeekdayLabels,
   nutritionWeekdayOrder,
   nutritionWeekdayShortLabels,
+  suggestFoodSubstitutions,
 } from '../lib/nutrition';
 import {
   calculateConsumedTotals,
@@ -25,7 +27,14 @@ import {
   getWeekdayFromDate,
   mealStatusLabels,
 } from '../lib/studentExecution';
-import type { MacroTotals, NutritionMeal, NutritionWeekday, StudentNutritionPlan } from '../types/nutrition';
+import type {
+  ConsumedMealFood,
+  MacroTotals,
+  NutritionLibraryItem,
+  NutritionMeal,
+  NutritionWeekday,
+  StudentNutritionPlan,
+} from '../types/nutrition';
 import type { Student } from '../types/student';
 import type { MealLogStatus, SaveMealLogPayload, StudentMealLog } from '../types/studentExecution';
 
@@ -34,6 +43,7 @@ type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 type StudentNutritionTrackerProps = {
   student: Student;
   plan: StudentNutritionPlan | null;
+  foodLibrary: NutritionLibraryItem[];
   mealLogs: StudentMealLog[];
   logDate: string;
   loading: boolean;
@@ -197,6 +207,7 @@ function MealStatusButton({
 export function StudentNutritionTracker({
   student,
   plan,
+  foodLibrary,
   mealLogs,
   logDate,
   loading,
@@ -208,6 +219,8 @@ export function StudentNutritionTracker({
 }: StudentNutritionTrackerProps) {
   const [notesDrafts, setNotesDrafts] = useState<Record<string, string>>({});
   const [localError, setLocalError] = useState<string | null>(null);
+  const [replacementTarget, setReplacementTarget] = useState<null | { mealId: string; foodId: string }>(null);
+  const [replacementNotes, setReplacementNotes] = useState('');
 
   const selectedWeekday = getWeekdayFromDate(logDate);
   const selectedMeals = plan?.meals.filter((meal) => meal.weekday === selectedWeekday) ?? [];
@@ -226,6 +239,11 @@ export function StudentNutritionTracker({
     );
   }, [mealLogs]);
 
+  useEffect(() => {
+    setReplacementTarget(null);
+    setReplacementNotes('');
+  }, [logDate, student.id]);
+
   const handleWeekdayPress = (weekday: NutritionWeekday) => {
     onChangeLogDate(getDateForWeekdayInCurrentWeek(weekday));
   };
@@ -236,6 +254,7 @@ export function StudentNutritionTracker({
     }
 
     setLocalError(null);
+    const currentLog = logsByMeal.get(meal.id);
 
     try {
       await onSaveMealLog({
@@ -245,10 +264,57 @@ export function StudentNutritionTracker({
         weekday: selectedWeekday,
         status,
         notes: notes ?? notesDrafts[meal.id] ?? '',
+        consumedFoods: buildConsumedFoods(meal, currentLog),
+        substitutions: currentLog?.substitutions ?? [],
       });
     } catch {
       setLocalError('Nao foi possivel atualizar essa refeicao.');
     }
+  };
+
+  const buildConsumedFoods = (meal: NutritionMeal, log?: StudentMealLog): ConsumedMealFood[] => {
+    if (log?.consumedFoods?.length) {
+      return log.consumedFoods;
+    }
+
+    return meal.foods.map((food) => ({
+      ...food,
+      originalFoodId: null,
+      substitutionId: null,
+      substituted: false,
+    }));
+  };
+
+  const handleReplaceFood = async (
+    meal: NutritionMeal,
+    food: ConsumedMealFood,
+    replacement: NutritionLibraryItem,
+  ) => {
+    const currentLog = logsByMeal.get(meal.id);
+    const currentFoods = buildConsumedFoods(meal, currentLog);
+    const currentSubstitutions = currentLog?.substitutions ?? [];
+    const built = buildFoodSubstitution(food, replacement, replacementNotes);
+    const nextFoods = currentFoods.map((item) =>
+      (item.originalFoodId ?? item.id) === (food.originalFoodId ?? food.id) ? built.food : item,
+    );
+    const nextSubstitutions = [
+      ...currentSubstitutions.filter((item) => item.originalFoodId !== (food.originalFoodId ?? food.id)),
+      built.substitution,
+    ];
+
+    await onSaveMealLog({
+      planId: plan?.id ?? null,
+      meal,
+      logDate,
+      weekday: selectedWeekday,
+      status: currentLog?.status ?? 'planned',
+      notes: notesDrafts[meal.id] ?? '',
+      consumedFoods: nextFoods,
+      substitutions: nextSubstitutions,
+    });
+
+    setReplacementTarget(null);
+    setReplacementNotes('');
   };
 
   return (
@@ -369,9 +435,20 @@ export function StudentNutritionTracker({
           <View style={styles.mealList}>
             {selectedMeals.length ? (
               selectedMeals.map((meal) => {
-                const mealTotals = calculateMealTotals(meal);
                 const log = logsByMeal.get(meal.id);
                 const status = log?.status ?? 'planned';
+                const consumedFoods = buildConsumedFoods(meal, log);
+                const mealTotals = consumedFoods.length
+                  ? consumedFoods.reduce(
+                      (total, food) => ({
+                        calories: total.calories + (Number(food.calories) || 0),
+                        protein: total.protein + (Number(food.protein) || 0),
+                        carbs: total.carbs + (Number(food.carbs) || 0),
+                        fat: total.fat + (Number(food.fat) || 0),
+                      }),
+                      { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                    )
+                  : calculateMealTotals(meal);
 
                 return (
                   <View key={meal.id} style={styles.mealCard}>
@@ -392,13 +469,67 @@ export function StudentNutritionTracker({
                     </View>
 
                     <View style={styles.foodList}>
-                      {meal.foods.map((food) => (
-                        <FoodLine
-                          key={food.id}
-                          name={food.name}
-                          value={`${food.quantity}${food.unit ? ` ${food.unit}` : ''}`}
-                        />
-                      ))}
+                      {consumedFoods.map((food) => {
+                        const targetFood = meal.foods.find((item) => item.id === (food.originalFoodId ?? food.id)) ?? food;
+                        const replacementOpen =
+                          replacementTarget?.mealId === meal.id &&
+                          replacementTarget?.foodId === (food.originalFoodId ?? food.id);
+                        const suggestions =
+                          !targetFood.substitutionLocked && foodLibrary.length
+                            ? suggestFoodSubstitutions(targetFood, foodLibrary)
+                            : [];
+
+                        return (
+                          <View key={food.id} style={styles.foodEntry}>
+                            <FoodLine
+                              name={food.name}
+                              value={`${food.quantity}${food.unit ? ` ${food.unit}` : ''}`}
+                            />
+                            {food.substituted ? (
+                              <Text style={styles.foodSwapText}>Substituido nesta refeicao</Text>
+                            ) : null}
+                            {!targetFood.substitutionLocked ? (
+                              <Pressable
+                                onPress={() =>
+                                  setReplacementTarget(
+                                    replacementOpen ? null : { mealId: meal.id, foodId: targetFood.id },
+                                  )
+                                }
+                                style={({ pressed }) => [styles.swapButton, pressed && styles.pressed]}
+                              >
+                                <Feather name="repeat" size={13} color="#9CF02E" />
+                                <Text style={styles.swapButtonText}>Trocar alimento</Text>
+                              </Pressable>
+                            ) : (
+                              <Text style={styles.foodSwapText}>Troca bloqueada pelo treinador</Text>
+                            )}
+
+                            {replacementOpen ? (
+                              <View style={styles.swapPanel}>
+                                {suggestions.map(({ item, preview }) => (
+                                  <Pressable
+                                    key={item.id}
+                                    onPress={() => void handleReplaceFood(meal, food, item)}
+                                    style={({ pressed }) => [styles.swapOption, pressed && styles.pressed]}
+                                  >
+                                    <Text style={styles.swapOptionTitle}>{item.name}</Text>
+                                    <Text style={styles.swapOptionText}>
+                                      {preview.substitution.replacementQuantity} {preview.substitution.replacementUnit}
+                                    </Text>
+                                  </Pressable>
+                                ))}
+                                <TextInput
+                                  value={replacementNotes}
+                                  placeholder="Observacao opcional sobre a troca"
+                                  placeholderTextColor="rgba(220, 244, 200, 0.34)"
+                                  onChangeText={setReplacementNotes}
+                                  style={styles.noteInput}
+                                />
+                              </View>
+                            ) : null}
+                          </View>
+                        );
+                      })}
                     </View>
 
                     {meal.notes ? <Text style={styles.mealNotes}>{meal.notes}</Text> : null}
@@ -789,6 +920,59 @@ const styles = StyleSheet.create({
     color: 'rgba(242, 255, 232, 0.88)',
     fontSize: 13,
     fontWeight: '800',
+  },
+  foodEntry: {
+    gap: 8,
+  },
+  foodSwapText: {
+    color: 'rgba(220, 244, 200, 0.62)',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  swapButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.18)',
+    backgroundColor: 'rgba(156, 240, 46, 0.08)',
+  },
+  swapButtonText: {
+    color: '#9CF02E',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  swapPanel: {
+    gap: 8,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.14)',
+    backgroundColor: 'rgba(7, 15, 8, 0.64)',
+  },
+  swapOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  swapOptionTitle: {
+    color: '#F2FFE8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  swapOptionText: {
+    marginTop: 3,
+    color: 'rgba(220, 244, 200, 0.62)',
+    fontSize: 11,
+    fontWeight: '700',
   },
   foodValue: {
     color: '#BCEAA9',

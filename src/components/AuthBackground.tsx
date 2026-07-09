@@ -6,6 +6,7 @@ export function AuthBackground() {
   const driftA = useRef(new Animated.Value(0)).current;
   const driftB = useRef(new Animated.Value(0)).current;
   const driftC = useRef(new Animated.Value(0)).current;
+  const driftD = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const createLoop = (value: Animated.Value, duration: number) => {
@@ -33,13 +34,15 @@ export function AuthBackground() {
     const loopA = createLoop(driftA, 14000);
     const loopB = createLoop(driftB, 18000);
     const loopC = createLoop(driftC, 22000);
+    const loopD = createLoop(driftD, 26000);
 
     return () => {
       loopA.stop();
       loopB.stop();
       loopC.stop();
+      loopD.stop();
     };
-  }, [driftA, driftB, driftC]);
+  }, [driftA, driftB, driftC, driftD]);
 
   const orbStyle = (
     value: Animated.Value,
@@ -90,9 +93,14 @@ export function AuthBackground() {
       <Animated.View
         style={[styles.orb, styles.orbTop, orbStyle(driftC, 18, 22, 1.05, 0.5)]}
       />
+      <Animated.View
+        style={[styles.orb, styles.orbCenter, orbStyle(driftD, -26, 18, 1.08, 0.35)]}
+      />
 
       <View style={styles.topWash} />
       <View style={styles.bottomWash} />
+      <View style={styles.vignetteLeft} />
+      <View style={styles.vignetteRight} />
       <View style={styles.matte} />
     </View>
   );
@@ -133,6 +141,13 @@ const styles = StyleSheet.create({
     left: '40%',
     backgroundColor: 'rgba(147, 240, 44, 0.1)',
   },
+  orbCenter: {
+    width: 360,
+    height: 360,
+    left: '36%',
+    top: '26%',
+    backgroundColor: 'rgba(84, 233, 118, 0.06)',
+  },
   topWash: {
     position: 'absolute',
     top: 0,
@@ -148,6 +163,22 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 220,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  vignetteLeft: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: '14%',
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
+  },
+  vignetteRight: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: '14%',
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
   },
   matte: {
     position: 'absolute',

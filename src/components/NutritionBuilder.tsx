@@ -22,20 +22,27 @@ import {
   calculateMealTotals,
   calculateTdee,
   calculateWeeklyTotals,
+  createEmptyLibraryItem,
   createEmptyFood,
+  createFoodFromLibraryItem,
   createEmptyMeal,
   formulaLabels,
   getActivePhase,
+  nutritionFoodCategoryLabels,
   nutritionWeekdayLabels,
   nutritionWeekdayOrder,
   nutritionWeekdayShortLabels,
   parseNutritionNumber,
   rebuildPhasesFromConfig,
 } from '../lib/nutrition';
+import { isUsdaConfigured, searchUsdaFoods, type UsdaFoodSearchResult } from '../lib/usdaFoods';
 import type { StudentGoal } from '../types/student';
 import type {
   MacroTotals,
   MealFood,
+  NutritionFoodCategory,
+  NutritionLibraryItem,
+  NutritionLibrarySource,
   NutritionAdherence,
   NutritionFormula,
   NutritionMeal,
@@ -47,16 +54,27 @@ import type {
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 type NutritionBuilderTab = 'control' | 'phases' | 'meals' | 'summary';
-type SectionKey = 'physical' | 'formula' | 'activity' | 'targets' | 'phases' | 'meals' | 'summary';
+type SectionKey = 'physical' | 'formula' | 'activity' | 'targets' | 'phases' | 'meals' | 'library' | 'summary';
 
 type NutritionBuilderProps = {
   plan: StudentNutritionPlan | null;
+  foodLibrary: NutritionLibraryItem[];
   studentName: string;
   studentGoal: StudentGoal;
   loading: boolean;
   saving: boolean;
   errorMessage?: string | null;
   canEdit: boolean;
+  mealLogs: Array<{
+    mealId: string;
+    mealName: string;
+    status: string;
+    consumedFoods: Array<{ name: string; quantity: string; unit: string; substituted?: boolean }>;
+    substitutions: Array<{ originalFoodName: string; replacementFoodName: string; replacementQuantity: string; replacementUnit: string }>;
+    notes: string;
+  }>;
+  mealLogDate: string;
+  onSaveLibrary: (items: NutritionLibraryItem[]) => Promise<NutritionLibraryItem[] | void> | NutritionLibraryItem[] | void;
   onSave: (plan: StudentNutritionPlan) => Promise<void> | void;
 };
 
@@ -114,6 +132,15 @@ const jsDayToNutrition: NutritionWeekday[] = [
   'friday',
   'saturday',
 ];
+
+const foodCategoryOptions = Object.entries(nutritionFoodCategoryLabels) as Array<
+  [NutritionFoodCategory, string]
+>;
+const librarySourceLabels: Record<NutritionLibrarySource, string> = {
+  seed: 'Base pronta',
+  usda: 'USDA',
+  manual: 'Manual',
+};
 
 function getCurrentWeekday(): NutritionWeekday {
   return jsDayToNutrition[new Date().getDay()] ?? 'monday';
@@ -280,27 +307,41 @@ function FoodLine({
   canEdit,
   onChange,
   onRemove,
+  onToggleLocked,
 }: {
   food: MealFood;
   canEdit: boolean;
   onChange: (food: MealFood) => void;
   onRemove: () => void;
+  onToggleLocked: () => void;
 }) {
   return (
     <View style={styles.foodLine}>
       <View style={styles.foodLineHeader}>
-        <TextInput
-          value={food.name}
-          placeholder="Alimento"
-          placeholderTextColor="rgba(220, 244, 200, 0.34)"
-          editable={canEdit}
-          onChangeText={(value) => onChange({ ...food, name: value })}
-          style={[styles.foodNameInput, !canEdit && styles.disabledInput]}
-        />
+        <View style={{ flex: 1 }}>
+          <TextInput
+            value={food.name}
+            placeholder="Alimento"
+            placeholderTextColor="rgba(220, 244, 200, 0.34)"
+            editable={canEdit}
+            onChangeText={(value) => onChange({ ...food, name: value })}
+            style={[styles.foodNameInput, !canEdit && styles.disabledInput]}
+          />
+          {food.libraryItemId ? (
+            <Text style={styles.foodMetaText}>
+              Biblioteca {food.category ? `· ${nutritionFoodCategoryLabels[food.category]}` : ''}
+            </Text>
+          ) : null}
+        </View>
         {canEdit ? (
-          <Pressable onPress={onRemove} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-            <Feather name="trash-2" size={15} color="#FCA5A5" />
-          </Pressable>
+          <>
+            <Pressable onPress={onToggleLocked} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+              <Feather name={food.substitutionLocked ? 'lock' : 'unlock'} size={15} color="#9CF02E" />
+            </Pressable>
+            <Pressable onPress={onRemove} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+              <Feather name="trash-2" size={15} color="#FCA5A5" />
+            </Pressable>
+          </>
         ) : null}
       </View>
       <View style={styles.foodFields}>
@@ -346,12 +387,16 @@ function SmallInput({
 
 export function NutritionBuilder({
   plan,
+  foodLibrary,
   studentName,
   studentGoal,
   loading,
   saving,
   errorMessage,
   canEdit,
+  mealLogs,
+  mealLogDate,
+  onSaveLibrary,
   onSave,
 }: NutritionBuilderProps) {
   const [draft, setDraft] = useState<StudentNutritionPlan | null>(plan);
@@ -363,6 +408,7 @@ export function NutritionBuilder({
     targets: true,
     phases: true,
     meals: true,
+    library: true,
     summary: true,
   });
   const [selectedWeekday, setSelectedWeekday] = useState<NutritionWeekday>(getCurrentWeekday());
@@ -370,6 +416,15 @@ export function NutritionBuilder({
   const [editingPhaseId, setEditingPhaseId] = useState<string | null>(null);
   const [newMealName, setNewMealName] = useState('');
   const [foodDrafts, setFoodDrafts] = useState<Record<string, FoodDraft>>({});
+  const [libraryDraft, setLibraryDraft] = useState<NutritionLibraryItem | null>(null);
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [libraryCategoryFilter, setLibraryCategoryFilter] = useState<NutritionFoodCategory | 'all'>('all');
+  const [librarySearchByMeal, setLibrarySearchByMeal] = useState<Record<string, string>>({});
+  const [usdaQuery, setUsdaQuery] = useState('');
+  const [usdaResults, setUsdaResults] = useState<UsdaFoodSearchResult[]>([]);
+  const [usdaLoading, setUsdaLoading] = useState(false);
+  const [usdaError, setUsdaError] = useState<string | null>(null);
+  const [usdaImportedIds, setUsdaImportedIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setDraft(plan);
@@ -378,9 +433,36 @@ export function NutritionBuilder({
     setFoodDrafts({});
   }, [plan?.id, plan?.updatedAt, plan?.studentId]);
 
+  useEffect(() => {
+    setLibraryDraft((current) =>
+      current && plan ? current : plan ? createEmptyLibraryItem(plan.trainerId, plan.consultancyId) : null,
+    );
+  }, [plan?.trainerId, plan?.consultancyId]);
+
   const canInteract = Boolean(canEdit && draft && !saving);
   const activePhase = draft ? getActivePhase(draft) : null;
   const selectedMeals = draft ? draft.meals.filter((meal) => meal.weekday === selectedWeekday) : [];
+  const normalizedMealLogs = useMemo(
+    () =>
+      (Array.isArray(mealLogs) ? mealLogs : []).map((log) => ({
+        mealId: log?.mealId ?? '',
+        mealName: log?.mealName ?? 'Refeição',
+        status: log?.status ?? 'pending',
+        consumedFoods: Array.isArray(log?.consumedFoods) ? log.consumedFoods : [],
+        substitutions: Array.isArray(log?.substitutions) ? log.substitutions : [],
+        notes: typeof log?.notes === 'string' ? log.notes : '',
+      })),
+    [mealLogs],
+  );
+  const filteredLibrary = useMemo(() => {
+    const query = librarySearch.trim().toLowerCase();
+    return foodLibrary.filter(
+      (item) =>
+        item.active &&
+        (libraryCategoryFilter === 'all' || item.category === libraryCategoryFilter) &&
+        (!query || item.name.toLowerCase().includes(query)),
+    );
+  }, [foodLibrary, libraryCategoryFilter, librarySearch]);
   const dayTotals = useMemo(
     () => (draft ? calculateDayTotals(draft, selectedWeekday) : { calories: 0, protein: 0, carbs: 0, fat: 0 }),
     [draft, selectedWeekday],
@@ -433,6 +515,101 @@ export function NutritionBuilder({
     }));
   }
 
+  function saveLibraryDraft() {
+    if (!libraryDraft?.name.trim() || !draft) {
+      return;
+    }
+
+    const nextItem = {
+      ...libraryDraft,
+      trainerId: draft.trainerId,
+      consultancyId: draft.consultancyId,
+      updatedAt: new Date().toISOString(),
+      createdAt: libraryDraft.createdAt ?? new Date().toISOString(),
+    };
+
+    void onSaveLibrary(buildNextLibraryItems(nextItem));
+    setLibraryDraft(createEmptyLibraryItem(draft.trainerId, draft.consultancyId));
+  }
+
+  function removeLibraryItem(itemId: string) {
+    void onSaveLibrary(foodLibrary.filter((item) => item.id !== itemId));
+  }
+
+  function buildNextLibraryItems(nextItem: NutritionLibraryItem) {
+    return [...foodLibrary.filter((item) => item.id !== nextItem.id), nextItem].sort((left, right) =>
+      left.name.localeCompare(right.name, 'pt-BR'),
+    );
+  }
+
+  async function handleSearchUsda() {
+    const query = usdaQuery.trim();
+    if (!query || !isUsdaConfigured) {
+      return;
+    }
+
+    setUsdaLoading(true);
+    setUsdaError(null);
+
+    try {
+      const results = await searchUsdaFoods(query, 10);
+      setUsdaResults(results);
+      setUsdaImportedIds(
+        Object.fromEntries(
+          results.map((result) => [
+            result.externalId,
+            foodLibrary.some((item) => item.externalId === result.externalId),
+          ]),
+        ),
+      );
+    } catch (error) {
+      setUsdaResults([]);
+      setUsdaError(error instanceof Error ? error.message : 'Nao foi possivel buscar alimentos na USDA agora.');
+    } finally {
+      setUsdaLoading(false);
+    }
+  }
+
+  async function importUsdaFood(result: UsdaFoodSearchResult) {
+    if (!draft) {
+      return;
+    }
+
+    const existingItem = foodLibrary.find((item) => item.externalId === result.externalId);
+    if (existingItem) {
+      setUsdaImportedIds((current) => ({ ...current, [result.externalId]: true }));
+      return;
+    }
+
+    const importedItem: NutritionLibraryItem = {
+      ...createEmptyLibraryItem(draft.trainerId, draft.consultancyId, result.category),
+      name: result.name,
+      category: result.category,
+      measureMode: result.measureMode,
+      portionQuantity: result.portionQuantity,
+      portionUnit: result.portionUnit,
+      portionValues: result.portionValues,
+      per100gValues: result.per100gValues,
+      notes: result.notes,
+      source: 'usda',
+      externalId: result.externalId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await onSaveLibrary(buildNextLibraryItems(importedItem));
+    setUsdaImportedIds((current) => ({ ...current, [result.externalId]: true }));
+  }
+
+  function addFoodFromLibrary(mealId: string, item: NutritionLibraryItem) {
+    updateDraft((current) => ({
+      ...current,
+      meals: current.meals.map((meal) =>
+        meal.id === mealId ? { ...meal, foods: [...meal.foods, createFoodFromLibraryItem(item)] } : meal,
+      ),
+    }));
+  }
+
   function addMeal() {
     if (!newMealName.trim()) {
       return;
@@ -456,6 +633,24 @@ export function NutritionBuilder({
     if (expandedMealId === mealId) {
       setExpandedMealId(null);
     }
+  }
+
+  function toggleFoodLock(mealId: string, foodId: string) {
+    updateDraft((current) => ({
+      ...current,
+      meals: current.meals.map((meal) =>
+        meal.id === mealId
+          ? {
+              ...meal,
+              foods: meal.foods.map((food) =>
+                food.id === foodId
+                  ? { ...food, substitutionLocked: !food.substitutionLocked }
+                  : food,
+              ),
+            }
+          : meal,
+      ),
+    }));
   }
 
   function updateFoodDraft(mealId: string, patch: Partial<FoodDraft>) {
@@ -1072,18 +1267,50 @@ export function NutritionBuilder({
                             onChangeText={(value) => updateMeal(meal.id, { notes: value })}
                           />
 
-                          {meal.foods.map((food) => (
-                            <FoodLine
-                              key={food.id}
-                              food={food}
-                              canEdit={canInteract}
-                              onChange={(nextFood) => updateFood(meal.id, nextFood)}
-                              onRemove={() => removeFood(meal.id, food.id)}
-                            />
-                          ))}
+                            {meal.foods.map((food) => (
+                              <FoodLine
+                                key={food.id}
+                                food={food}
+                                canEdit={canInteract}
+                                onChange={(nextFood) => updateFood(meal.id, nextFood)}
+                                onRemove={() => removeFood(meal.id, food.id)}
+                                onToggleLocked={() => toggleFoodLock(meal.id, food.id)}
+                              />
+                            ))}
 
                           {canEdit ? (
                             <View style={styles.foodComposer}>
+                              <Text style={styles.subLabel}>Adicionar da biblioteca</Text>
+                              <TextInput
+                                value={librarySearchByMeal[meal.id] ?? ''}
+                                placeholder="Buscar alimento da biblioteca"
+                                placeholderTextColor="rgba(220, 244, 200, 0.34)"
+                                editable={canInteract}
+                                onChangeText={(value) =>
+                                  setLibrarySearchByMeal((current) => ({ ...current, [meal.id]: value }))
+                                }
+                                style={[styles.input, !canInteract && styles.disabledInput]}
+                              />
+                              <View style={styles.librarySuggestionGrid}>
+                                {foodLibrary
+                                  .filter((item) => {
+                                    const query = (librarySearchByMeal[meal.id] ?? '').trim().toLowerCase();
+                                    return item.active && (!query || item.name.toLowerCase().includes(query));
+                                  })
+                                  .slice(0, 12)
+                                  .map((item) => (
+                                    <Pressable
+                                      key={item.id}
+                                      onPress={() => addFoodFromLibrary(meal.id, item)}
+                                      style={({ pressed }) => [styles.librarySuggestionCard, pressed && styles.pressed]}
+                                    >
+                                      <Text style={styles.librarySuggestionTitle}>{item.name}</Text>
+                                      <Text style={styles.librarySuggestionText}>
+                                        {nutritionFoodCategoryLabels[item.category]} · {librarySourceLabels[item.source ?? 'manual']}
+                                      </Text>
+                                    </Pressable>
+                                  ))}
+                              </View>
                               <Text style={styles.subLabel}>Adicionar alimento</Text>
                               <View style={styles.foodFields}>
                                 <SmallInput label="Nome" value={form.name} editable={canInteract} onChangeText={(value) => updateFoodDraft(meal.id, { name: value })} />
@@ -1117,6 +1344,233 @@ export function NutritionBuilder({
                   <Text style={styles.emptyTitle}>Nenhuma refeição neste dia</Text>
                   <Text style={styles.emptyText}>Crie a primeira refeição para começar a montar a dieta.</Text>
                 </View>
+              )}
+            </View>
+          </Section>
+
+          <Section
+            eyebrow="Biblioteca"
+            title="Base de alimentos"
+            icon="database-outline"
+            expanded={openSections.library}
+            onToggle={() => toggleSection('library')}
+            description="Cadastre a base de alimentos para montar o plano e liberar trocas equivalentes."
+          >
+            <TextInput
+              value={librarySearch}
+              placeholder="Buscar alimento da biblioteca"
+              placeholderTextColor="rgba(220, 244, 200, 0.34)"
+              editable={canInteract}
+              onChangeText={setLibrarySearch}
+              style={[styles.input, !canInteract && styles.disabledInput]}
+            />
+
+            <View style={styles.chipWrap}>
+              <Chip
+                label="Todos"
+                active={libraryCategoryFilter === 'all'}
+                disabled={!canInteract}
+                onPress={() => setLibraryCategoryFilter('all')}
+              />
+              {foodCategoryOptions.map(([value, label]) => (
+                <Chip
+                  key={value}
+                  label={label}
+                  active={libraryCategoryFilter === value}
+                  disabled={!canInteract}
+                  onPress={() => setLibraryCategoryFilter(value)}
+                />
+              ))}
+            </View>
+
+            <View style={styles.noteCard}>
+              <Text style={styles.noteTitle}>Base pronta para o treinador</Text>
+              <Text style={styles.noteText}>
+                A biblioteca local ja nasce com alimentos principais em PT-BR. Use a busca abaixo para achar rapido e,
+                se faltar algo, complemente pela USDA.
+              </Text>
+            </View>
+
+            <View style={styles.apiCard}>
+              <View style={styles.apiHeader}>
+                <View>
+                  <Text style={styles.noteTitle}>Buscar alimento na USDA</Text>
+                  <Text style={styles.noteText}>
+                    Importa alimentos extras para a biblioteca do treinador quando a base pronta nao for suficiente.
+                  </Text>
+                </View>
+                <View style={[styles.sourceBadge, !isUsdaConfigured && styles.sourceBadgeMuted]}>
+                  <Text style={styles.sourceBadgeText}>{isUsdaConfigured ? 'API ativa' : 'API indisponivel'}</Text>
+                </View>
+              </View>
+
+              {isUsdaConfigured ? (
+                <>
+                  <View style={styles.apiSearchRow}>
+                    <TextInput
+                      value={usdaQuery}
+                      placeholder="Ex.: chicken breast, oats, yogurt"
+                      placeholderTextColor="rgba(220, 244, 200, 0.34)"
+                      editable={canInteract && !usdaLoading}
+                      onChangeText={setUsdaQuery}
+                      style={[styles.input, styles.apiSearchInput, (!canInteract || usdaLoading) && styles.disabledInput]}
+                    />
+                    <Pressable
+                      onPress={() => void handleSearchUsda()}
+                      disabled={!canInteract || usdaLoading || !usdaQuery.trim()}
+                      style={({ pressed }) => [
+                        styles.secondaryAction,
+                        styles.apiSearchButton,
+                        (!canInteract || usdaLoading || !usdaQuery.trim()) && styles.disabledAction,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      {usdaLoading ? <ActivityIndicator size="small" color="#9CF02E" /> : <Feather name="search" size={15} color="#9CF02E" />}
+                      <Text style={styles.secondaryActionText}>{usdaLoading ? 'Buscando' : 'Buscar na API'}</Text>
+                    </Pressable>
+                  </View>
+
+                  {usdaError ? <Text style={styles.apiErrorText}>{usdaError}</Text> : null}
+
+                  {usdaResults.length ? (
+                    <View style={styles.apiResultsList}>
+                      {usdaResults.map((item) => (
+                        <View key={item.externalId} style={styles.apiResultCard}>
+                          <View style={styles.libraryItemCopy}>
+                            <Text style={styles.libraryItemTitle}>{item.name}</Text>
+                            <Text style={styles.libraryItemMeta}>
+                              {nutritionFoodCategoryLabels[item.category]} · {item.measureMode === 'per_100g' ? '100g' : `${item.portionQuantity} ${item.portionUnit}`}
+                            </Text>
+                            <Text style={styles.libraryHistoryMeta}>
+                              {item.per100gValues.calories || '0'} kcal · {item.per100gValues.protein || '0'}P · {item.per100gValues.carbs || '0'}C · {item.per100gValues.fat || '0'}G
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => void importUsdaFood(item)}
+                            disabled={!canInteract || Boolean(usdaImportedIds[item.externalId])}
+                            style={({ pressed }) => [
+                              styles.secondaryAction,
+                              Boolean(usdaImportedIds[item.externalId]) && styles.disabledAction,
+                              pressed && styles.pressed,
+                            ]}
+                          >
+                            <Feather
+                              name={usdaImportedIds[item.externalId] ? 'check' : 'download'}
+                              size={15}
+                              color={usdaImportedIds[item.externalId] ? '#061007' : '#9CF02E'}
+                            />
+                            <Text style={styles.secondaryActionText}>
+                              {usdaImportedIds[item.externalId] ? 'Importado' : 'Importar'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={styles.noteText}>
+                  Configure `EXPO_PUBLIC_USDA_API_KEY` para liberar importacao de alimentos via USDA sem afetar a base pronta.
+                </Text>
+              )}
+            </View>
+
+            {libraryDraft ? (
+              <View style={styles.libraryEditor}>
+                <Text style={styles.noteTitle}>Cadastro manual e ajustes</Text>
+                <Text style={styles.noteText}>
+                  Use este bloco apenas para criar um alimento manualmente ou ajustar um item ja existente da biblioteca.
+                </Text>
+                <TextField
+                  label="Nome do alimento"
+                  value={libraryDraft.name}
+                  editable={canInteract}
+                  onChangeText={(value) =>
+                    setLibraryDraft((current) => (current ? { ...current, name: value } : current))
+                  }
+                />
+                <View style={styles.chipWrap}>
+                  {([
+                    ['portion', 'Por porcao'],
+                    ['per_100g', 'Por 100g'],
+                    ['both', 'Os dois'],
+                  ] as const).map(([value, label]) => (
+                    <Chip
+                      key={value}
+                      label={label}
+                      active={libraryDraft.measureMode === value}
+                      disabled={!canInteract}
+                      onPress={() =>
+                        setLibraryDraft((current) => (current ? { ...current, measureMode: value } : current))
+                      }
+                    />
+                  ))}
+                </View>
+                <View style={styles.foodFields}>
+                  <SmallInput label="Qtd porção" value={libraryDraft.portionQuantity} editable={canInteract} onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, portionQuantity: value } : current))} />
+                  <SmallInput label="Unidade" value={libraryDraft.portionUnit} editable={canInteract} onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, portionUnit: value } : current))} />
+                  <SmallInput label="Kcal porção" value={libraryDraft.portionValues.calories} editable={canInteract} numeric onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, portionValues: { ...current.portionValues, calories: value } } : current))} />
+                  <SmallInput label="Prot porção" value={libraryDraft.portionValues.protein} editable={canInteract} numeric onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, portionValues: { ...current.portionValues, protein: value } } : current))} />
+                  <SmallInput label="Carb porção" value={libraryDraft.portionValues.carbs} editable={canInteract} numeric onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, portionValues: { ...current.portionValues, carbs: value } } : current))} />
+                  <SmallInput label="Gord porção" value={libraryDraft.portionValues.fat} editable={canInteract} numeric onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, portionValues: { ...current.portionValues, fat: value } } : current))} />
+                  <SmallInput label="Kcal 100g" value={libraryDraft.per100gValues.calories} editable={canInteract} numeric onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, per100gValues: { ...current.per100gValues, calories: value } } : current))} />
+                  <SmallInput label="Prot 100g" value={libraryDraft.per100gValues.protein} editable={canInteract} numeric onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, per100gValues: { ...current.per100gValues, protein: value } } : current))} />
+                  <SmallInput label="Carb 100g" value={libraryDraft.per100gValues.carbs} editable={canInteract} numeric onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, per100gValues: { ...current.per100gValues, carbs: value } } : current))} />
+                  <SmallInput label="Gord 100g" value={libraryDraft.per100gValues.fat} editable={canInteract} numeric onChangeText={(value) => setLibraryDraft((current) => (current ? { ...current, per100gValues: { ...current.per100gValues, fat: value } } : current))} />
+                </View>
+                <View style={styles.mealActions}>
+                  <Pressable onPress={saveLibraryDraft} style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}>
+                    <Feather name="save" size={15} color="#9CF02E" />
+                    <Text style={styles.secondaryActionText}>Salvar alimento</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.libraryList}>
+              {filteredLibrary.map((item) => (
+                <View key={item.id} style={styles.libraryItemCard}>
+                  <View style={styles.libraryItemCopy}>
+                    <Text style={styles.libraryItemTitle}>{item.name}</Text>
+                    <Text style={styles.libraryItemMeta}>
+                      {nutritionFoodCategoryLabels[item.category]} · {item.measureMode === 'per_100g' ? '100g' : `${item.portionQuantity} ${item.portionUnit}`}
+                    </Text>
+                    <Text style={styles.libraryHistoryMeta}>{librarySourceLabels[item.source ?? 'manual']}</Text>
+                  </View>
+                  <View style={styles.libraryItemActions}>
+                    <Pressable onPress={() => setLibraryDraft(item)} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+                      <Feather name="edit-2" size={14} color="#9CF02E" />
+                    </Pressable>
+                    <Pressable onPress={() => removeLibraryItem(item.id)} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+                      <Feather name="trash-2" size={14} color="#FCA5A5" />
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.noteCard}>
+              <Text style={styles.noteTitle}>Historico do dia</Text>
+              <Text style={styles.noteText}>Registros carregados de {mealLogDate} para este aluno.</Text>
+              {normalizedMealLogs.length ? (
+                <View style={styles.libraryHistoryList}>
+                  {normalizedMealLogs.map((log) => (
+                    <View key={log.mealId} style={styles.libraryHistoryCard}>
+                      <Text style={styles.libraryItemTitle}>{log.mealName}</Text>
+                      <Text style={styles.libraryHistoryMeta}>Status: {log.status}</Text>
+                      {log.substitutions.map((item) => (
+                        <Text key={`${item.originalFoodName}-${item.replacementFoodName}`} style={styles.libraryHistoryMeta}>
+                          {item.originalFoodName}
+                          {' -> '}
+                          {item.replacementFoodName} ({item.replacementQuantity} {item.replacementUnit})
+                        </Text>
+                      ))}
+                      {log.notes ? <Text style={styles.libraryHistoryMeta}>Obs: {log.notes}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.noteText}>Nenhum registro deste dia ainda.</Text>
               )}
             </View>
           </Section>
@@ -2010,6 +2464,147 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  foodMetaText: {
+    marginTop: 4,
+    color: 'rgba(220, 244, 200, 0.56)',
+    fontSize: 10,
+    fontFamily: 'Sora_500Medium',
+  },
+  librarySuggestionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  librarySuggestionCard: {
+    minWidth: 120,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+    gap: 4,
+  },
+  librarySuggestionTitle: {
+    color: '#F2FFE8',
+    fontSize: 12,
+    fontFamily: 'Sora_700Bold',
+  },
+  librarySuggestionText: {
+    color: 'rgba(220, 244, 200, 0.62)',
+    fontSize: 10,
+    fontFamily: 'Sora_500Medium',
+  },
+  libraryEditor: {
+    gap: 12,
+  },
+  apiCard: {
+    gap: 12,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(9, 18, 11, 0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.14)',
+  },
+  apiHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  apiSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  apiSearchInput: {
+    flex: 1,
+  },
+  apiSearchButton: {
+    minWidth: 144,
+  },
+  apiResultsList: {
+    gap: 10,
+  },
+  apiResultCard: {
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  apiErrorText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Sora_500Medium',
+  },
+  sourceBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+    alignSelf: 'flex-start',
+  },
+  sourceBadgeMuted: {
+    backgroundColor: 'rgba(220, 244, 200, 0.14)',
+  },
+  sourceBadgeText: {
+    color: '#061007',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  libraryList: {
+    gap: 10,
+  },
+  libraryItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  libraryItemCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  libraryItemTitle: {
+    color: '#F2FFE8',
+    fontSize: 13,
+    fontFamily: 'Sora_700Bold',
+  },
+  libraryItemMeta: {
+    color: 'rgba(220, 244, 200, 0.62)',
+    fontSize: 11,
+    fontFamily: 'Sora_500Medium',
+  },
+  libraryItemActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  libraryHistoryList: {
+    gap: 10,
+    marginTop: 12,
+  },
+  libraryHistoryCard: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.08)',
+    gap: 4,
+  },
+  libraryHistoryMeta: {
+    color: 'rgba(220, 244, 200, 0.68)',
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: 'Sora_500Medium',
+  },
   secondaryAction: {
     minHeight: 42,
     paddingHorizontal: 13,
@@ -2020,6 +2615,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+  },
+  disabledAction: {
+    opacity: 0.5,
   },
   secondaryActionText: {
     color: '#9CF02E',

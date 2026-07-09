@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+﻿import { supabase } from './supabase';
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import type { Student, StudentFormPayload } from '../types/student';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -6,6 +6,33 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const STUDENT_SELECT =
   'id, trainer_id, consultancy_id, auth_user_id, full_name, email, whatsapp, age, sex, height_cm, weight_kg, goal, activity_level, experience, restrictions, display_name, username, headline, bio, location, instagram_url, website_url, avatar_path, avatar_url, cover_path, cover_url, status, created_at, updated_at';
+
+export type OwnStudentResolutionCode =
+  | 'OWN_STUDENT_NOT_FOUND'
+  | 'OWN_STUDENT_AMBIGUOUS'
+  | 'OWN_STUDENT_LINKED_TO_ANOTHER_ACCOUNT'
+  | 'OWN_STUDENT_AUTH_REQUIRED'
+  | 'OWN_STUDENT_EMAIL_NOT_FOUND'
+  | 'OWN_STUDENT_LINK_UPDATE_FAILED';
+
+const ownStudentResolutionMessages: Record<OwnStudentResolutionCode, string> = {
+  OWN_STUDENT_NOT_FOUND: 'OWN_STUDENT_NOT_FOUND',
+  OWN_STUDENT_AMBIGUOUS: 'OWN_STUDENT_AMBIGUOUS',
+  OWN_STUDENT_LINKED_TO_ANOTHER_ACCOUNT: 'OWN_STUDENT_LINKED_TO_ANOTHER_ACCOUNT',
+  OWN_STUDENT_AUTH_REQUIRED: 'OWN_STUDENT_AUTH_REQUIRED',
+  OWN_STUDENT_EMAIL_NOT_FOUND: 'OWN_STUDENT_EMAIL_NOT_FOUND',
+  OWN_STUDENT_LINK_UPDATE_FAILED: 'OWN_STUDENT_LINK_UPDATE_FAILED',
+};
+
+export class OwnStudentResolutionError extends Error {
+  code: OwnStudentResolutionCode;
+
+  constructor(code: OwnStudentResolutionCode) {
+    super(ownStudentResolutionMessages[code]);
+    this.code = code;
+    this.name = 'OwnStudentResolutionError';
+  }
+}
 
 function optionalText(value: string) {
   const trimmed = value.trim();
@@ -38,6 +65,39 @@ function mapPayloadToDb(payload: StudentFormPayload) {
   };
 }
 
+function isOwnStudentResolutionCode(value: string): value is OwnStudentResolutionCode {
+  return value in ownStudentResolutionMessages;
+}
+
+function extractOwnStudentResolutionCode(error: unknown): OwnStudentResolutionCode | null {
+  const message =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : '';
+  const normalizedMessage = message.trim().toUpperCase();
+
+  if (isOwnStudentResolutionCode(normalizedMessage)) {
+    return normalizedMessage;
+  }
+
+  const matchedCode = normalizedMessage.match(/OWN_STUDENT_[A-Z_]+/)?.[0];
+  return matchedCode && isOwnStudentResolutionCode(matchedCode) ? matchedCode : null;
+}
+
+function normalizeOwnStudentRecord(data: unknown): Student | null {
+  if (!data) {
+    return null;
+  }
+
+  if (Array.isArray(data)) {
+    return data.length ? (data[0] as Student) : null;
+  }
+
+  return data as Student;
+}
+
 async function withNotificationCounts(students: Student[]) {
   if (!students.length) {
     return [];
@@ -67,6 +127,16 @@ async function withNotificationCounts(students: Student[]) {
   }));
 }
 
+async function withOptionalNotificationCount(student: Student) {
+  try {
+    const [studentWithNotifications] = await withNotificationCounts([student]);
+    return studentWithNotifications ?? student;
+  } catch (error) {
+    console.warn('Failed to load notification count for own student', error);
+    return student;
+  }
+}
+
 async function getFunctionErrorMessage(error: unknown) {
   if (error instanceof FunctionsHttpError) {
     try {
@@ -81,11 +151,11 @@ async function getFunctionErrorMessage(error: unknown) {
   }
 
   if (error instanceof FunctionsRelayError) {
-    return 'Falha de rede ao chamar a Edge Function. Verifique a publicação da função no Supabase.';
+    return 'Falha de rede ao chamar a Edge Function. Verifique a publicaÃ§Ã£o da funÃ§Ã£o no Supabase.';
   }
 
   if (error instanceof FunctionsFetchError) {
-    return 'Nao foi possivel alcançar a Edge Function. Verifique se a função create-student foi publicada.';
+    return 'Nao foi possivel alcanÃ§ar a Edge Function. Verifique se a funÃ§Ã£o create-student foi publicada.';
   }
 
   if (error instanceof Error) {
@@ -176,6 +246,21 @@ export async function fetchTrainerStudents(trainerId: string) {
   return withNotificationCounts(merged);
 }
 
+export async function repairOwnStudentAccountAccess() {
+  const { data, error } = await supabase.rpc('resolve_own_student_account');
+
+  if (error) {
+    const resolutionCode = extractOwnStudentResolutionCode(error);
+    if (resolutionCode) {
+      throw new OwnStudentResolutionError(resolutionCode);
+    }
+
+    throw error;
+  }
+
+  return normalizeOwnStudentRecord(data);
+}
+
 export async function fetchOwnStudent(userId: string) {
   const { data, error } = await supabase
     .from('students')
@@ -187,7 +272,17 @@ export async function fetchOwnStudent(userId: string) {
     throw error;
   }
 
-  return data as Student | null;
+  if (data) {
+    return withOptionalNotificationCount(data as Student);
+  }
+
+  const repairedStudent = await repairOwnStudentAccountAccess();
+
+  if (!repairedStudent) {
+    throw new OwnStudentResolutionError('OWN_STUDENT_NOT_FOUND');
+  }
+
+  return withOptionalNotificationCount(repairedStudent);
 }
 
 export async function createStudent(consultancyId: string, payload: StudentFormPayload) {
@@ -213,6 +308,7 @@ export async function createStudent(consultancyId: string, payload: StudentFormP
     if (error) {
       const errorMsg = await getFunctionErrorMessage(error);
       const isNotFound = error instanceof FunctionsHttpError && error.context.status === 404;
+      const isAuthIssue = error instanceof FunctionsHttpError && (error.context.status === 401 || error.context.status === 403);
       const lowerErrorMsg = errorMsg.toLowerCase();
       const isUnreachable =
         error instanceof FunctionsFetchError ||
@@ -221,9 +317,11 @@ export async function createStudent(consultancyId: string, payload: StudentFormP
         lowerErrorMsg.includes('failed to send request to the edge function') ||
         lowerErrorMsg.includes('edge function') ||
         lowerErrorMsg.includes('function not found') ||
-        lowerErrorMsg.includes('not found');
+        lowerErrorMsg.includes('not found') ||
+        lowerErrorMsg.includes('entre como treinador') ||
+        lowerErrorMsg.includes('apenas treinadores');
 
-      if (isNotFound || isUnreachable) {
+      if (isNotFound || isAuthIssue || isUnreachable) {
         return await createLocalStudentFallback(consultancyId, payload);
       }
       throw new Error(errorMsg);
@@ -237,7 +335,9 @@ export async function createStudent(consultancyId: string, payload: StudentFormP
         lowerErrorMsg.includes('failed to send request to the edge function') ||
         lowerErrorMsg.includes('edge function') ||
         lowerErrorMsg.includes('function not found') ||
-        lowerErrorMsg.includes('not found')
+        lowerErrorMsg.includes('not found') ||
+        lowerErrorMsg.includes('entre como treinador') ||
+        lowerErrorMsg.includes('apenas treinadores')
       ) {
         return await createLocalStudentFallback(consultancyId, payload);
       }
@@ -255,6 +355,8 @@ export async function createStudent(consultancyId: string, payload: StudentFormP
       msg.includes('edge function') ||
       msg.includes('function not found') ||
       msg.includes('not found') ||
+      msg.includes('entre como treinador') ||
+      msg.includes('apenas treinadores') ||
       err instanceof FunctionsFetchError ||
       err instanceof FunctionsRelayError;
 
@@ -311,7 +413,7 @@ export async function updateStudent(studentId: string, payload: StudentFormPaylo
       }
       return updatedStudent;
     }
-    throw new Error('Estudante local não encontrado');
+    throw new Error('Estudante local nÃ£o encontrado');
   }
 
   const { data, error } = await supabase
@@ -327,4 +429,5 @@ export async function updateStudent(studentId: string, payload: StudentFormPaylo
 
   return data as Student;
 }
+
 

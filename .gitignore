@@ -12,3 +12,6 @@ artifacts
 *.log
 *.tsbuildinfo
 *.keystore
+
+.vercel
+.env*

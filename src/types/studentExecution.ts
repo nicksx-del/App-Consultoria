@@ -1,4 +1,10 @@
-import type { MacroTotals, NutritionMeal, NutritionWeekday } from './nutrition';
+import type {
+  ConsumedMealFood,
+  MacroTotals,
+  MealFoodSubstitution,
+  NutritionMeal,
+  NutritionWeekday,
+} from './nutrition';
 import type { CardioIntensity } from './training';
 import type { WorkoutDay } from './training';
 
@@ -62,6 +68,8 @@ export type StudentMealLog = {
   weekday: NutritionWeekday;
   status: MealLogStatus;
   totals: MacroTotals;
+  consumedFoods: ConsumedMealFood[];
+  substitutions: MealFoodSubstitution[];
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -96,6 +104,8 @@ export type SaveMealLogPayload = {
   weekday: NutritionWeekday;
   status: MealLogStatus;
   notes: string;
+  consumedFoods?: ConsumedMealFood[];
+  substitutions?: MealFoodSubstitution[];
 };
 
 export type SaveCardioLogPayload = {

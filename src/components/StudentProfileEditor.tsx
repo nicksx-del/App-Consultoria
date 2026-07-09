@@ -23,6 +23,7 @@ type StudentProfileEditorProps = {
   saving?: boolean;
   errorMessage?: string | null;
   onSave: (payload: StudentProfilePayload) => Promise<void> | void;
+  onEditLater?: () => void;
 };
 
 type ProfileFormState = {
@@ -140,6 +141,7 @@ export function StudentProfileEditor({
   saving = false,
   errorMessage,
   onSave,
+  onEditLater,
 }: StudentProfileEditorProps) {
   const [form, setForm] = useState<ProfileFormState>(() => makeInitialState(student));
   const [avatarAsset, setAvatarAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
@@ -280,13 +282,16 @@ export function StudentProfileEditor({
           <View style={styles.heroTopRow}>
             <View style={styles.kickerPill}>
               <MaterialCommunityIcons name="account-edit-outline" size={14} color="#061007" />
-              <Text style={styles.kickerPillText}>{canEdit ? 'Editar perfil público' : 'Perfil público'}</Text>
+              <Text style={styles.kickerPillText}>{canEdit ? 'Editar perfil p?blico' : 'Perfil p?blico'}</Text>
             </View>
-            <View style={styles.statePill}>
-              <Feather name={student.avatar_url || avatarAsset ? 'check' : 'image'} size={13} color="#DFF7C9" />
-              <Text style={styles.statePillText}>
-                {student.avatar_url || avatarAsset ? 'Foto pronta' : 'Foto pendente'}
-              </Text>
+            
+            <View style={styles.heroActions}>
+              <View style={styles.statePill}>
+                <Feather name={student.avatar_url || avatarAsset ? 'check' : 'image'} size={13} color="#DFF7C9" />
+                <Text style={styles.statePillText}>
+                  {student.avatar_url || avatarAsset ? 'Foto pronta' : 'Foto pendente'}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -306,31 +311,39 @@ export function StudentProfileEditor({
               <View style={[styles.progressFill, { width: `${profileCompleteness}%` }]} />
             </View>
           </View>
-
-          <Pressable
-            disabled={!canEdit || loading || saving}
-            onPress={() => void handlePickCover()}
-            style={({ pressed }) => [styles.coverWrap, pressed && styles.pressed, !canEdit && styles.disabled]}
-          >
-            {coverSource ? (
-              <ImageBackground source={{ uri: coverSource }} resizeMode="cover" style={styles.coverImage}>
-                <View style={styles.coverShade} />
-                <View style={styles.coverHint}>
-                  <Feather name="image" size={14} color="#EEF4E7" />
-                  <Text style={styles.coverHintText}>
-                    {canEdit ? 'Toque para trocar a capa' : 'Capa do perfil'}
-                  </Text>
+          <View style={styles.coverCompactCard}>
+            <View style={styles.coverPreview}>
+              {coverSource ? (
+                <ImageBackground source={{ uri: coverSource }} resizeMode="cover" style={styles.coverPreviewImage}>
+                  <View style={styles.coverPreviewShade} />
+                </ImageBackground>
+              ) : (
+                <View style={styles.coverPreviewPlaceholder}>
+                  <Feather name="image" size={20} color="#9CF02E" />
                 </View>
-              </ImageBackground>
-            ) : (
-              <View style={styles.coverPlaceholder}>
-                <Feather name="image" size={24} color="#9CF02E" />
-                <Text style={styles.coverPlaceholderText}>
-                  {canEdit ? 'Adicionar capa do perfil' : 'Sem capa definida'}
-                </Text>
-              </View>
-            )}
-          </Pressable>
+              )}
+            </View>
+
+            <View style={styles.coverCompactCopy}>
+              <Text style={styles.coverCompactTitle}>{coverSource ? 'Capa definida' : 'Adicionar capa'}</Text>
+              <Text style={styles.coverCompactText}>
+                {coverSource ? 'Toque para trocar a imagem.' : 'Opcional, mas deixa o perfil mais bonito.'}
+              </Text>
+            </View>
+
+            <Pressable
+              disabled={!canEdit || loading || saving}
+              onPress={() => void handlePickCover()}
+              style={({ pressed }) => [
+                styles.coverCompactButton,
+                pressed && styles.pressed,
+                (!canEdit || loading || saving) && styles.disabledButton,
+              ]}
+            >
+              <Feather name="image" size={14} color="#061007" />
+              <Text style={styles.coverCompactButtonText}>{coverSource ? 'Trocar' : 'Adicionar'}</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.identityRow}>
             <Pressable
@@ -376,22 +389,23 @@ export function StudentProfileEditor({
           <Text style={styles.sectionTitle}>Como o perfil vai aparecer</Text>
 
           <View style={styles.previewCard}>
-            <View style={styles.previewBanner}>
-              {coverSource ? (
+            {coverSource ? (
+              <View style={styles.previewBanner}>
                 <ImageBackground source={{ uri: coverSource }} resizeMode="cover" style={styles.previewCoverImage}>
                   <View style={styles.previewCoverShade} />
                 </ImageBackground>
-              ) : (
-                <LinearGradient
-                  colors={['rgba(177, 255, 42, 0.36)', 'rgba(8, 12, 8, 0.92)']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.previewCoverPlaceholder}
-                >
-                  <Feather name="image" size={18} color="#E8F7D8" />
-                </LinearGradient>
-              )}
-            </View>
+              </View>
+            ) : (
+              <View style={styles.previewEmptyRow}>
+                <View style={styles.previewEmptyIcon}>
+                  <Feather name="image" size={16} color="#9CF02E" />
+                </View>
+                <View style={styles.previewEmptyCopy}>
+                  <Text style={styles.previewEmptyTitle}>Sem capa ainda</Text>
+                  <Text style={styles.previewEmptyText}>Você pode deixar para depois sem perder o resto do perfil.</Text>
+                </View>
+              </View>
+            )}
 
             <View style={styles.previewIdentityRow}>
               <View style={styles.previewAvatarShell}>
@@ -536,6 +550,26 @@ export function StudentProfileEditor({
               <Text style={styles.saveButtonText}>{saving ? 'Salvando...' : 'Salvar perfil'}</Text>
             </LinearGradient>
           </Pressable>
+
+          {onEditLater ? (
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={10}
+              onPress={() => {
+                if (!saving) {
+                  onEditLater();
+                }
+              }}
+              style={({ pressed }) => [
+                styles.editLaterAction,
+                pressed && styles.pressed,
+                saving && styles.disabledButton,
+              ]}
+            >
+              <Feather name="clock" size={14} color="#DCE8CE" />
+              <Text style={styles.editLaterActionText}>Editar depois</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.hintCard}>
@@ -571,6 +605,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  heroActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   kickerPill: {
     flexDirection: 'row',
@@ -646,47 +687,64 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#B1FF2A',
   },
-  coverWrap: {
-    borderRadius: 22,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(156, 240, 46, 0.12)',
-  },
-  coverImage: {
-    height: 190,
-    justifyContent: 'flex-end',
-  },
-  coverShade: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(3, 4, 2, 0.22)',
-  },
-  coverHint: {
-    alignSelf: 'flex-start',
+  coverCompactCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    margin: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(3, 4, 2, 0.6)',
+    gap: 12,
+    padding: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+    backgroundColor: 'rgba(18, 22, 16, 0.88)',
   },
-  coverHintText: {
-    color: '#EEF4E7',
-    fontSize: 12,
-    fontFamily: 'Sora_600SemiBold',
+  coverPreview: {
+    width: 58,
+    height: 58,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(177, 255, 42, 0.12)',
   },
-  coverPlaceholder: {
-    height: 190,
+  coverPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPreviewShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.16)',
+  },
+  coverPreviewPlaceholder: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(18, 22, 16, 0.9)',
   },
-  coverPlaceholderText: {
-    color: '#C9E9B0',
-    fontSize: 12,
-    fontFamily: 'Sora_600SemiBold',
+  coverCompactCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  coverCompactTitle: {
+    color: '#F3F7EF',
+    fontSize: 14,
+    fontFamily: 'Sora_700Bold',
+  },
+  coverCompactText: {
+    color: '#C1CABA',
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: 'Sora_400Regular',
+  },
+  coverCompactButton: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+  },
+  coverCompactButtonText: {
+    color: '#061007',
+    fontSize: 11,
+    fontFamily: 'Sora_800ExtraBold',
   },
   identityRow: {
     flexDirection: 'row',
@@ -784,7 +842,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(156, 240, 46, 0.1)',
   },
   previewBanner: {
-    height: 110,
+    height: 74,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: 'rgba(177, 255, 42, 0.08)',
@@ -800,6 +858,39 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  previewEmptyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(177, 255, 42, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+  },
+  previewEmptyIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(177, 255, 42, 0.1)',
+  },
+  previewEmptyCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  previewEmptyTitle: {
+    color: '#F3F7EF',
+    fontSize: 13,
+    fontFamily: 'Sora_700Bold',
+  },
+  previewEmptyText: {
+    color: '#C1CABA',
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: 'Sora_400Regular',
   },
   previewIdentityRow: {
     flexDirection: 'row',
@@ -957,6 +1048,25 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     marginTop: 2,
+    gap: 10,
+  },
+  editLaterAction: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    width: '100%',
+    alignSelf: 'stretch',
+    borderRadius: 16,
+    backgroundColor: 'rgba(22, 26, 18, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.16)',
+  },
+  editLaterActionText: {
+    color: '#DCE8CE',
+    fontSize: 13,
+    fontFamily: 'Sora_600SemiBold',
   },
   saveButton: {
     borderRadius: 16,
