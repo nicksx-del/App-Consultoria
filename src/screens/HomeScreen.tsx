@@ -1,7 +1,9 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import {
   Animated,
+  Image,
+  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -17,6 +19,10 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthBackground } from '../components/AuthBackground';
 import { BrandMark } from '../components/BrandMark';
 
+const APK_DOWNLOAD_URL = process.env.EXPO_PUBLIC_APK_DOWNLOAD_URL?.trim() ?? '';
+const FITTO_BANNER = require('../../assets/readme/fitto-banner.png');
+const FITTO_MOBILE_HERO = require('../../assets/readme/fitto-mobile-hero.png');
+
 type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 type LoginRole = 'trainer' | 'student';
 
@@ -25,22 +31,36 @@ type HomeScreenProps = {
   onSignupPress: (role: LoginRole) => void;
 };
 
-type FeatureCardProps = {
-  icon: IconName;
-  title: string;
-  description: string;
-};
+const speechMessages = [
+  'Bora evoluir hoje?',
+  'Disciplina vence motivação.',
+  'Pronto para um novo recorde?',
+  'Seu futuro começa agora.',
+];
 
-type ActionButtonProps = {
-  label: string;
-  icon: ComponentProps<typeof MaterialCommunityIcons>['name'];
-  variant: 'primary' | 'secondary' | 'ghost';
-  onPress: () => void;
-};
+function useIntroMotion() {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
 
-const APK_DOWNLOAD_URL = process.env.EXPO_PUBLIC_APK_DOWNLOAD_URL?.trim() ?? '';
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 460,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 560,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+    ]).start();
+  }, [opacity, translateY]);
 
-function useAnimatedScale() {
+  return { opacity, translateY };
+}
+
+function useHoverScale() {
   const scale = useRef(new Animated.Value(1)).current;
 
   const animateTo = (value: number) => {
@@ -56,728 +76,727 @@ function useAnimatedScale() {
   return { scale, animateTo };
 }
 
-function FeatureCard({ icon, title, description }: FeatureCardProps) {
-  return (
-    <View style={styles.featureCard}>
-      <View style={styles.featureIconShell}>
-        <MaterialCommunityIcons name={icon} size={18} color="#9CF02E" />
-      </View>
-      <View style={styles.featureCopy}>
-        <Text style={styles.featureTitle}>{title}</Text>
-        <Text style={styles.featureDescription}>{description}</Text>
-      </View>
-    </View>
-  );
+function useSpeechRotation() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((current) => (current + 1) % speechMessages.length);
+    }, 3200);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return speechMessages[index] ?? speechMessages[0];
 }
 
-function ActionButton({ label, icon, variant, onPress }: ActionButtonProps) {
-  const { scale, animateTo } = useAnimatedScale();
+function ActionButton({
+  label,
+  icon,
+  variant,
+  onPress,
+}: {
+  label: string;
+  icon: IconName;
+  variant: 'primary' | 'secondary';
+  onPress: () => void;
+}) {
+  const { scale, animateTo } = useHoverScale();
   const isPrimary = variant === 'primary';
-  const isGhost = variant === 'ghost';
-
-  const content = isPrimary ? (
-    <LinearGradient
-      colors={['#B1FF2A', '#58E976']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.primaryFill}
-    >
-      <View style={styles.buttonIconShell}>
-        <MaterialCommunityIcons name={icon} size={18} color="#07110B" />
-      </View>
-      <Text style={styles.primaryButtonText}>{label}</Text>
-    </LinearGradient>
-  ) : (
-    <View style={[styles.secondaryFill, isGhost && styles.ghostFill]}>
-      <View style={styles.buttonIconShell}>
-        <MaterialCommunityIcons name={icon} size={18} color={isGhost ? '#9CF02E' : '#EEF4E7'} />
-      </View>
-      <Text style={[styles.secondaryButtonText, isGhost && styles.ghostButtonText]}>{label}</Text>
-    </View>
-  );
 
   return (
-    <Animated.View style={[styles.buttonShell, { transform: [{ scale }] }]}>
+    <Animated.View style={[styles.actionShell, { transform: [{ scale }] }]}>
       <Pressable
         onPress={onPress}
-        onPressIn={() => animateTo(Platform.OS === 'web' ? 1.03 : 0.98)}
+        onPressIn={() => animateTo(Platform.OS === 'web' ? 1.02 : 0.985)}
         onPressOut={() => animateTo(1)}
         onHoverIn={() => animateTo(1.03)}
         onHoverOut={() => animateTo(1)}
-        style={({ pressed }) => [styles.buttonPressable, pressed && styles.pressedSoft]}
+        style={({ pressed }) => [
+          styles.actionPressable,
+          isPrimary ? styles.primaryAction : styles.secondaryAction,
+          pressed && styles.pressedSoft,
+        ]}
       >
-        {content}
+        {isPrimary ? (
+          <LinearGradient
+            colors={['#B1FF2A', '#58E976']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.primaryFill}
+          >
+            <MaterialCommunityIcons name={icon} size={18} color="#07110B" />
+            <Text style={styles.primaryActionText}>{label}</Text>
+            <Feather name="arrow-right" size={16} color="#07110B" />
+          </LinearGradient>
+        ) : (
+          <View style={styles.secondaryFill}>
+            <MaterialCommunityIcons name={icon} size={18} color="#EAF8E4" />
+            <Text style={styles.secondaryActionText}>{label}</Text>
+            <Feather name="arrow-right" size={16} color="rgba(243, 247, 239, 0.72)" />
+          </View>
+        )}
       </Pressable>
     </Animated.View>
   );
 }
 
-function FeatureStat({
-  value,
-  label,
+function PortalCard({
+  title,
+  description,
   icon,
+  bullets,
+  onPress,
+  onHoverState,
+  active,
 }: {
-  value: string;
-  label: string;
+  title: string;
+  description: string;
   icon: IconName;
+  bullets: string[];
+  onPress: () => void;
+  onHoverState: (state: 'neutral' | 'trainer' | 'student') => void;
+  active: boolean;
 }) {
+  const { scale, animateTo } = useHoverScale();
+  const isTrainerCard = title === 'Sou treinador';
+  const hoverState = isTrainerCard ? 'trainer' : 'student';
+
   return (
-    <View style={styles.featureStat}>
-      <View style={styles.featureStatIcon}>
-        <MaterialCommunityIcons name={icon} size={15} color="#9CF02E" />
-      </View>
-      <Text style={styles.featureStatValue}>{value}</Text>
-      <Text style={styles.featureStatLabel}>{label}</Text>
+    <Animated.View style={[styles.portalShell, { transform: [{ scale }] }]}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => animateTo(Platform.OS === 'web' ? 1.02 : 0.985)}
+        onPressOut={() => animateTo(1)}
+        onHoverIn={() => {
+          animateTo(1.03);
+          onHoverState(hoverState);
+        }}
+        onHoverOut={() => {
+          animateTo(1);
+          onHoverState('neutral');
+        }}
+        style={({ pressed }) => [styles.portalCard, active && styles.portalCardActive, pressed && styles.pressedSoft]}
+      >
+        <LinearGradient
+          colors={['rgba(156, 240, 46, 0.16)', 'rgba(156, 240, 46, 0.04)', 'rgba(8, 10, 8, 0.92)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.portalGlow}
+        />
+        <View style={styles.portalTopRow}>
+          <View style={styles.portalIcon}>
+            <MaterialCommunityIcons name={icon} size={22} color="#07110B" />
+          </View>
+          <View style={styles.portalArrow}>
+            <Feather name="arrow-up-right" size={18} color="#9CF02E" />
+          </View>
+        </View>
+        <Text style={styles.portalTitle}>{title}</Text>
+        <Text style={styles.portalDescription}>{description}</Text>
+        <View style={styles.portalList}>
+          {bullets.map((bullet) => (
+            <View key={bullet} style={styles.portalListItem}>
+              <View style={styles.portalBullet} />
+              <Text style={styles.portalListText}>{bullet}</Text>
+            </View>
+          ))}
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function BenefitChip({ icon, label }: { icon: IconName; label: string }) {
+  return (
+    <View style={styles.benefitChip}>
+      <MaterialCommunityIcons name={icon} size={18} color="#9CF02E" />
+      <Text style={styles.benefitChipText}>{label}</Text>
     </View>
   );
 }
 
-function PreviewMetric({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-}) {
-  return (
-    <View style={styles.previewMetric}>
-      <Text style={[styles.previewMetricValue, { color: accent }]}>{value}</Text>
-      <Text style={styles.previewMetricLabel}>{label}</Text>
-    </View>
-  );
-}
+function FittoHero({ message, compact }: { message: string; compact: boolean }) {
+  const floatY = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
 
-function ProgressBar({ value }: { value: number }) {
-  return (
-    <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: `${value}%` }]} />
-    </View>
-  );
-}
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatY, {
+          toValue: -8,
+          duration: 2600,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(floatY, {
+          toValue: 0,
+          duration: 2600,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]),
+    ).start();
 
-function PreviewPanel() {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, {
+          toValue: 1,
+          duration: 2400,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(glow, {
+          toValue: 0,
+          duration: 2400,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]),
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]),
+    ).start();
+  }, [floatY, glow, pulse]);
+
   return (
-    <View style={styles.previewPanel}>
-      <LinearGradient
-        colors={['rgba(177, 255, 42, 0.12)', 'rgba(88, 233, 118, 0.04)', 'rgba(6, 8, 6, 0.0)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.previewGlow}
+    <View style={[styles.heroArtWrap, compact && styles.heroArtWrapCompact]}>
+      <Animated.View
+        style={[
+          styles.heroAura,
+          {
+            opacity: glow.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.45, 0.8],
+            }),
+            transform: [
+              {
+                scale: glow.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.95, 1.08],
+                }),
+              },
+            ],
+          },
+        ]}
       />
-
-      <View style={styles.previewHeader}>
-        <View>
-          <Text style={styles.previewEyebrow}>Visão da experiência</Text>
-          <Text style={styles.previewTitle}>Tudo pronto para o treino do dia</Text>
-        </View>
-        <View style={styles.previewStatusPill}>
-          <View style={styles.previewStatusDot} />
-          <Text style={styles.previewStatusText}>Online</Text>
-        </View>
-      </View>
-
-      <View style={styles.previewCard}>
-        <View style={styles.previewCardTop}>
-          <View style={styles.previewAvatar}>
-            <MaterialCommunityIcons name="chart-timeline-variant" size={18} color="#07110B" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.previewCardLabel}>Sessão recomendada</Text>
-            <Text style={styles.previewCardTitle}>Treino de força + mobilidade</Text>
-          </View>
-        </View>
-
-        <View style={styles.previewChecks}>
-          <View style={styles.previewCheckRow}>
-            <Feather name="check-circle" size={14} color="#9CF02E" />
-            <Text style={styles.previewCheckText}>Treino liberado</Text>
-          </View>
-          <View style={styles.previewCheckRow}>
-            <Feather name="check-circle" size={14} color="#9CF02E" />
-            <Text style={styles.previewCheckText}>Dieta sincronizada</Text>
-          </View>
-          <View style={styles.previewCheckRow}>
-            <Feather name="check-circle" size={14} color="#9CF02E" />
-            <Text style={styles.previewCheckText}>Progresso atualizado</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.previewRow}>
-        <PreviewMetric label="Aderência" value="94%" accent="#B1FF2A" />
-        <PreviewMetric label="Check-ins" value="+18" accent="#58E976" />
-        <PreviewMetric label="Hoje" value="7/7" accent="#EAF8E4" />
-      </View>
-
-      <View style={styles.previewInsight}>
-        <View style={styles.previewInsightHeader}>
-          <Text style={styles.previewInsightTitle}>Resumo rápido</Text>
-          <Text style={styles.previewInsightValue}>+12% esta semana</Text>
-        </View>
-        <View style={styles.miniChart}>
-          <View style={[styles.chartBar, { height: 18 }]} />
-          <View style={[styles.chartBar, { height: 34 }]} />
-          <View style={[styles.chartBar, { height: 26 }]} />
-          <View style={[styles.chartBar, { height: 46 }]} />
-          <View style={[styles.chartBar, { height: 30 }]} />
-          <View style={[styles.chartBar, { height: 52 }]} />
-        </View>
-      </View>
+      <Animated.View
+        style={[
+          styles.heroOrbitOne,
+          {
+            opacity: pulse.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.18, 0.34],
+            }),
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroOrbitTwo,
+          {
+            opacity: pulse.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.12, 0.24],
+            }),
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroMascotWrap,
+          {
+            transform: [
+              {
+                translateY: floatY,
+              },
+              {
+                scale: pulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.985, 1.01],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Image
+          source={compact ? FITTO_MOBILE_HERO : FITTO_BANNER}
+          style={[styles.heroMascot, compact && styles.heroMascotCompact]}
+          resizeMode="contain"
+        />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.speechBubble,
+          compact && styles.speechBubbleCompact,
+          {
+            opacity: pulse.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.94, 1],
+            }),
+          },
+        ]}
+      >
+        <View style={styles.speechBubbleTail} />
+        <Text style={styles.speechBubbleTitle}>Fala, campeão!</Text>
+        <Text style={styles.speechBubbleText}>{message}</Text>
+      </Animated.View>
+      <View style={styles.heroSparkOne} />
+      <View style={styles.heroSparkTwo} />
+      <View style={styles.heroSparkThree} />
     </View>
   );
 }
 
 export function HomeScreen({ onLoginPress, onSignupPress }: HomeScreenProps) {
   const { width } = useWindowDimensions();
-  const isWide = width >= 960;
-
-  const features = [
-    {
-      icon: 'dumbbell',
-      title: 'Treino organizado',
-      description: 'Acompanhe a execução, os treinos e o histórico do aluno em um só lugar.',
-    },
-    {
-      icon: 'food-apple-outline',
-      title: 'Dieta integrada',
-      description: 'Una prescrição, acompanhamento alimentar e evolução em uma experiência clara.',
-    },
-    {
-      icon: 'chart-line',
-      title: 'Progresso visível',
-      description: 'Veja a jornada do aluno com mais consistência, contexto e presença do treinador.',
-    },
-  ] as const;
+  const isWide = width >= 980;
+  const compact = !isWide;
+  const { opacity, translateY } = useIntroMotion();
+  const speechMessage = useSpeechRotation();
+  const [fittoMood, setFittoMood] = useState<'neutral' | 'trainer' | 'student'>('neutral');
+  const fittoCaption =
+    fittoMood === 'trainer'
+      ? 'Treinador: vamos montar a melhor sessão.'
+      : fittoMood === 'student'
+        ? 'Aluno: foco na execução e no progresso.'
+        : speechMessage;
 
   return (
     <SafeAreaView style={styles.screen}>
       <AuthBackground />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} bounces={false}>
+        <Animated.View
+          style={[
+            styles.page,
+            {
+              opacity,
+              transform: [{ translateY }],
+            },
+          ]}
+        >
+          <View style={[styles.shell, isWide && styles.shellWide]}>
+            <View style={styles.topBar}>
+              <BrandMark
+                size="md"
+                align="left"
+                subtitle="Seu mentor fitness"
+                titleStyle={styles.brandTitle}
+                subtitleStyle={styles.brandSubtitle}
+                containerStyle={styles.brandWrap}
+                logoShellStyle={styles.brandLogoShell}
+              />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <View style={styles.pageWrap}>
-          <View style={[styles.card, isWide && styles.cardWide]}>
-            <LinearGradient
-              colors={['rgba(177, 255, 42, 0.18)', 'rgba(88, 233, 118, 0.02)', 'rgba(0, 0, 0, 0)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.cardGlow}
-            />
+              <ActionButton
+                label="Ajuda"
+                icon="help-circle-outline"
+                variant="secondary"
+                onPress={() => onLoginPress('trainer')}
+              />
+            </View>
 
-            <View style={[styles.cardInner, isWide && styles.cardInnerWide]}>
-              <View style={[styles.heroColumn, isWide && styles.heroColumnWide]}>
-                <BrandMark
-                  size="lg"
-                  align="left"
-                  subtitle="Consultoria fitness mobile"
-                  titleStyle={styles.brandTitle}
-                  subtitleStyle={styles.brandSubtitle}
-                  containerStyle={styles.brandWrap}
-                  logoShellStyle={styles.brandLogoShell}
-                />
+            <View style={styles.heroCopyBlock}>
+              <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>
+                Mais que um app.{'\n'}
+                Seu parceiro na <Text style={styles.heroAccent}>evolução.</Text>
+              </Text>
+              <Text style={[styles.heroSubtitle, compact && styles.heroSubtitleCompact]}>
+                Treinos inteligentes para treinadores e alunos.
+              </Text>
+            </View>
 
-                <View style={styles.heroCopy}>
-                  <View style={styles.heroTopline}>
-                    <View style={styles.heroDot} />
-                    <Text style={styles.heroToplineText}>
-                      Tela inicial reformulada para ficar mais clara e sofisticada
-                    </Text>
-                  </View>
+            <FittoHero message={fittoCaption} compact={compact} />
 
-                  <Text style={styles.title}>Treino, dieta e acompanhamento em um só lugar.</Text>
-                  <Text style={styles.subtitle}>
-                    Entre como treinador ou aluno e siga direto para uma experiência feita para uso
-                    diário, clara e profissional.
-                  </Text>
-                </View>
+            <View style={styles.portalGrid}>
+              <PortalCard
+                title="Sou treinador"
+                description="Crie treinos personalizados. Gerencie alunos. Acompanhe evolução."
+                icon="dumbbell"
+                bullets={['Criar treinos personalizados', 'Gerenciar alunos', 'Acompanhar evolução']}
+                onPress={() => onLoginPress('trainer')}
+                onHoverState={setFittoMood}
+                active={fittoMood === 'trainer'}
+              />
+              <PortalCard
+                title="Sou aluno"
+                description="Execute treinos. Registre cargas. Acompanhe resultados."
+                icon="account-outline"
+                bullets={['Executar treinos', 'Registrar cargas', 'Acompanhar resultados']}
+                onPress={() => onLoginPress('student')}
+                onHoverState={setFittoMood}
+                active={fittoMood === 'student'}
+              />
+            </View>
 
-                <View style={styles.featureStatsRow}>
-                  <FeatureStat value="1 painel" label="para gestão" icon="view-dashboard-outline" />
-                  <FeatureStat value="3 fluxos" label="em um app" icon="account-group-outline" />
-                  <FeatureStat value="100%" label="mobile first" icon="cellphone" />
-                </View>
+            <View style={styles.benefitsRow}>
+              <BenefitChip icon="flash-outline" label="Fluxo rápido" />
+              <BenefitChip icon="cellphone" label="100% Mobile" />
+              <BenefitChip icon="shield-check-outline" label="Seguro e confiável" />
+              <BenefitChip icon="chart-line" label="Resultados reais" />
+              <BenefitChip icon="heart-outline" label="Pensado para você" />
+            </View>
 
-                <View style={styles.featureList}>
-                  {features.map((item) => (
-                    <FeatureCard
-                      key={item.title}
-                      icon={item.icon}
-                      title={item.title}
-                      description={item.description}
-                    />
-                  ))}
-                </View>
-
-                <View style={styles.actions}>
-                  <ActionButton
-                    label="Entrar como treinador"
-                    icon="account-tie-outline"
-                    variant="primary"
-                    onPress={() => onLoginPress('trainer')}
-                  />
-                  <ActionButton
-                    label="Entrar como aluno"
-                    icon="account-outline"
-                    variant="secondary"
-                    onPress={() => onLoginPress('student')}
-                  />
-                  <ActionButton
-                    label="Baixar APK"
-                    icon="download-outline"
-                    variant="ghost"
-                    onPress={() => {
-                      if (Platform.OS === 'web') {
-                        window.location.href = APK_DOWNLOAD_URL || '/?page=download';
-                      }
-                    }}
-                  />
-                  <ActionButton
-                    label="Criar conta de treinador"
-                    icon="account-plus-outline"
-                    variant="ghost"
-                    onPress={() => onSignupPress('trainer')}
-                  />
-                </View>
-
-                <View style={styles.supportStrip}>
-                  <View style={styles.supportItem}>
-                    <Text style={styles.supportLabel}>Fluxo</Text>
-                    <Text style={styles.supportValue}>Treinador cria, aluno acompanha</Text>
-                  </View>
-                  <View style={styles.supportDivider} />
-                  <View style={styles.supportItem}>
-                    <Text style={styles.supportLabel}>Tempo</Text>
-                    <Text style={styles.supportValue}>Entrada rápida, sem ruído visual</Text>
-                  </View>
-                </View>
+            <View style={styles.footerCard}>
+              <Text style={styles.footerQuote}>
+                "Constância transforma. Disciplina constrói."
+              </Text>
+              <Text style={styles.footerText}>Evolua todos os dias com o Fitto ao seu lado.</Text>
+              <View style={styles.footerHeart}>
+                <Feather name="heart" size={14} color="#9CF02E" />
               </View>
+            </View>
 
-              <View style={[styles.previewColumn, isWide && styles.previewColumnWide]}>
-                <PreviewPanel />
+            <View style={styles.actionsRow}>
+              <ActionButton
+                label="Entrar como treinador"
+                icon="account-tie-outline"
+                variant="primary"
+                onPress={() => onLoginPress('trainer')}
+              />
+              <ActionButton
+                label="Entrar como aluno"
+                icon="account-outline"
+                variant="secondary"
+                onPress={() => onLoginPress('student')}
+              />
+            </View>
 
-                <View style={styles.detailRail}>
-                  <View style={styles.detailBand}>
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Acesso</Text>
-                      <Text style={styles.detailValue}>Rápido e direto</Text>
-                    </View>
-                    <View style={styles.detailDivider} />
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Foco</Text>
-                      <Text style={styles.detailValue}>Treino e acompanhamento</Text>
-                    </View>
-                  </View>
-                  <View style={styles.previewMicroCard}>
-                    <View style={styles.previewMicroHeader}>
-                      <Text style={styles.previewMicroTitle}>Fluxo pensado para o dia a dia</Text>
-                      <MaterialCommunityIcons name="arrow-top-right" size={14} color="#9CF02E" />
-                    </View>
-                    <Text style={styles.previewMicroText}>
-                      Tela inicial com leitura rápida, menos blocos competindo e ações mais evidentes.
-                    </Text>
-                  </View>
-                </View>
+            <View style={styles.linksRow}>
+              <Text style={styles.linksLabel}>Acesso rápido</Text>
+              <View style={styles.linksWrap}>
+                <TextLink label="Criar conta" icon="account-plus-outline" onPress={() => onSignupPress('trainer')} />
+                <TextLink
+                  label="Baixar APK"
+                  icon="download-outline"
+                  onPress={() => {
+                    if (Platform.OS === 'web') {
+                      window.location.href = APK_DOWNLOAD_URL || '/?page=download';
+                      return;
+                    }
+
+                    if (APK_DOWNLOAD_URL) {
+                      void Linking.openURL(APK_DOWNLOAD_URL);
+                    }
+                  }}
+                />
+                <TextLink label="Ajuda" icon="help-circle-outline" onPress={() => onLoginPress('trainer')} />
+                <TextLink label="Termos" icon="file-document-outline" onPress={() => onLoginPress('trainer')} />
               </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function TextLink({
+  label,
+  icon,
+  onPress,
+}: {
+  label: string;
+  icon: IconName;
+  onPress: () => void;
+}) {
+  const { scale, animateTo } = useHoverScale();
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => animateTo(Platform.OS === 'web' ? 1.03 : 0.985)}
+        onPressOut={() => animateTo(1)}
+        onHoverIn={() => animateTo(1.03)}
+        onHoverOut={() => animateTo(1)}
+        style={({ pressed }) => [styles.textLink, pressed && styles.pressedSoft]}
+      >
+        <MaterialCommunityIcons name={icon} size={14} color="#9CF02E" />
+        <Text style={styles.textLinkText}>{label}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#030402',
+    backgroundColor: '#020302',
   },
   scrollContent: {
     flexGrow: 1,
   },
-  pageWrap: {
+  page: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 18,
-    paddingVertical: 28,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 840,
-    borderRadius: 38,
-    borderWidth: 1,
-    borderColor: 'rgba(180, 255, 133, 0.14)',
-    backgroundColor: 'rgba(7, 10, 8, 0.9)',
-    overflow: 'hidden',
-    boxShadow: '0 28px 80px rgba(0, 0, 0, 0.68)',
-    shadowColor: '#000',
-    shadowOpacity: 0.62,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 20 },
-    elevation: 14,
-  },
-  cardWide: {
-    maxWidth: 1180,
-  },
-  cardGlow: {
-    position: 'absolute',
-    top: -20,
-    left: -20,
-    right: -20,
-    height: 260,
-  },
-  cardInner: {
-    paddingHorizontal: 20,
     paddingVertical: 22,
-    gap: 22,
   },
-  cardInnerWide: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 28,
-    paddingHorizontal: 28,
-    paddingVertical: 28,
-  },
-  heroColumn: {
+  shell: {
+    width: '100%',
+    maxWidth: 1080,
+    alignSelf: 'center',
     gap: 18,
   },
-  heroColumnWide: {
-    flex: 1.08,
-    minWidth: 0,
+  shellWide: {
+    maxWidth: 1120,
   },
-  previewColumn: {
-    gap: 14,
-  },
-  previewColumnWide: {
-    flex: 0.92,
-    minWidth: 0,
-    paddingTop: 4,
+  topBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   brandWrap: {
-    gap: 10,
+    gap: 8,
   },
   brandLogoShell: {
     backgroundColor: 'rgba(156, 240, 46, 0.12)',
   },
   brandTitle: {
-    fontFamily: 'Sora_700Bold',
+    color: '#F3F7EF',
     fontSize: 18,
-    letterSpacing: 0.3,
+    fontFamily: 'Sora_700Bold',
+    letterSpacing: 0.2,
   },
   brandSubtitle: {
-    fontFamily: 'Sora_500Medium',
+    color: 'rgba(193, 202, 186, 0.78)',
     fontSize: 11,
+    fontFamily: 'Sora_500Medium',
   },
-  heroCopy: {
-    gap: 14,
-  },
-  heroTopline: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
+  heroCopyBlock: {
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: 'rgba(156, 240, 46, 0.08)',
+    gap: 10,
+    paddingTop: 6,
+  },
+  heroTitle: {
+    color: '#F3F7EF',
+    fontSize: 34,
+    lineHeight: 40,
+    textAlign: 'center',
+    fontFamily: 'Sora_800ExtraBold',
+    letterSpacing: -0.9,
+    maxWidth: 720,
+  },
+  heroTitleCompact: {
+    fontSize: 28,
+    lineHeight: 34,
+    maxWidth: 360,
+  },
+  heroAccent: {
+    color: '#9CF02E',
+  },
+  heroSubtitle: {
+    color: 'rgba(193, 202, 186, 0.82)',
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    fontFamily: 'Sora_400Regular',
+    maxWidth: 560,
+  },
+  heroSubtitleCompact: {
+    maxWidth: 320,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  heroArtWrap: {
+    position: 'relative',
+    alignSelf: 'center',
+    width: '100%',
+    minHeight: 380,
+    borderRadius: 34,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(7, 10, 8, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroArtWrapCompact: {
+    minHeight: 480,
+  },
+  heroAura: {
+    position: 'absolute',
+    width: 420,
+    height: 420,
+    borderRadius: 420,
+    backgroundColor: 'rgba(156, 240, 46, 0.16)',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.3,
+    shadowRadius: 60,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  heroOrbitOne: {
+    position: 'absolute',
+    width: 520,
+    height: 520,
+    borderRadius: 520,
     borderWidth: 1,
     borderColor: 'rgba(156, 240, 46, 0.18)',
   },
-  heroDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: '#9CF02E',
-    shadowColor: '#9CF02E',
-    shadowOpacity: 0.34,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  heroToplineText: {
-    color: '#C9E9B0',
-    fontSize: 11,
-    fontFamily: 'Sora_600SemiBold',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
-  },
-  title: {
-    color: '#F3F7EF',
-    fontSize: 36,
-    lineHeight: 42,
-    textAlign: 'left',
-    fontFamily: 'Sora_800ExtraBold',
-    letterSpacing: -0.6,
-    maxWidth: 610,
-  },
-  subtitle: {
-    color: '#C1CABA',
-    fontSize: 15,
-    lineHeight: 24,
-    textAlign: 'left',
-    maxWidth: 610,
-    fontFamily: 'Sora_400Regular',
-  },
-  featureStatsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  featureStat: {
-    flexGrow: 1,
-    flexBasis: 128,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  heroOrbitTwo: {
+    position: 'absolute',
+    width: 650,
+    height: 650,
+    borderRadius: 650,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    gap: 8,
+    borderColor: 'rgba(156, 240, 46, 0.08)',
   },
-  featureStatIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(156, 240, 46, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(156, 240, 46, 0.12)',
-  },
-  featureStatValue: {
-    color: '#F3F7EF',
-    fontSize: 16,
-    lineHeight: 20,
-    fontFamily: 'Sora_700Bold',
-  },
-  featureStatLabel: {
-    color: 'rgba(193, 202, 186, 0.8)',
-    fontSize: 11,
-    lineHeight: 15,
-    fontFamily: 'Sora_500Medium',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  featureList: {
-    gap: 12,
-  },
-  featureCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  featureIconShell: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(156, 240, 46, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(156, 240, 46, 0.12)',
-  },
-  featureCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  featureTitle: {
-    color: '#F3F7EF',
-    fontSize: 14,
-    fontFamily: 'Sora_700Bold',
-  },
-  featureDescription: {
-    color: 'rgba(193, 202, 186, 0.8)',
-    fontSize: 12,
-    lineHeight: 18,
-    fontFamily: 'Sora_400Regular',
-  },
-  actions: {
-    gap: 12,
-  },
-  buttonShell: {
-    borderRadius: 16,
-  },
-  buttonPressable: {
-    borderRadius: 16,
-  },
-  pressedSoft: {
-    opacity: 0.94,
-  },
-  primaryFill: {
-    minHeight: 52,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  secondaryFill: {
-    minHeight: 52,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(22, 26, 18, 0.82)',
-    borderWidth: 1,
-    borderColor: 'rgba(146, 255, 68, 0.18)',
-  },
-  ghostFill: {
-    backgroundColor: 'rgba(22, 26, 18, 0.58)',
-    borderStyle: 'dashed',
-  },
-  buttonIconShell: {
-    width: 22,
+  heroMascotWrap: {
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButtonText: {
-    color: '#07110B',
-    fontSize: 15,
-    fontFamily: 'Sora_700Bold',
-    letterSpacing: 0.1,
+  heroMascot: {
+    width: '100%',
+    maxWidth: 880,
+    height: 420,
+    marginTop: 8,
   },
-  secondaryButtonText: {
-    color: '#EEF4E7',
-    fontSize: 15,
-    fontFamily: 'Sora_600SemiBold',
-    letterSpacing: 0.1,
+  heroMascotCompact: {
+    maxWidth: 360,
+    height: 440,
+    marginTop: -6,
   },
-  ghostButtonText: {
-    color: '#DFF7C9',
-  },
-  supportStrip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 14,
+  speechBubble: {
+    position: 'absolute',
+    right: 18,
+    top: '36%',
+    maxWidth: 240,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 22,
+    backgroundColor: 'rgba(12, 16, 12, 0.9)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(156, 240, 46, 0.55)',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
   },
-  supportItem: {
-    flex: 1,
-    flexBasis: 180,
-    gap: 4,
+  speechBubbleCompact: {
+    right: 12,
+    top: 28,
+    maxWidth: 174,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  supportLabel: {
-    color: 'rgba(193, 202, 186, 0.68)',
-    fontSize: 10,
-    lineHeight: 14,
-    fontFamily: 'Sora_600SemiBold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.9,
+  speechBubbleTail: {
+    position: 'absolute',
+    left: -8,
+    top: 46,
+    width: 16,
+    height: 16,
+    backgroundColor: 'rgba(12, 16, 12, 0.9)',
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.55)',
+    transform: [{ rotate: '45deg' }],
   },
-  supportValue: {
+  speechBubbleTitle: {
+    color: '#9CF02E',
+    fontSize: 18,
+    fontFamily: 'Sora_800ExtraBold',
+  },
+  speechBubbleText: {
+    marginTop: 6,
     color: '#F3F7EF',
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: 'Sora_600SemiBold',
+    fontFamily: 'Sora_500Medium',
   },
-  supportDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  heroSparkOne: {
+    position: 'absolute',
+    left: '8%',
+    top: '28%',
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.7,
+    shadowRadius: 12,
   },
-  previewPanel: {
-    position: 'relative',
-    overflow: 'hidden',
-    borderRadius: 28,
-    padding: 18,
-    backgroundColor: 'rgba(10, 12, 10, 0.86)',
-    borderWidth: 1,
-    borderColor: 'rgba(180, 255, 133, 0.12)',
+  heroSparkTwo: {
+    position: 'absolute',
+    right: '12%',
+    top: '22%',
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.7,
+    shadowRadius: 12,
+  },
+  heroSparkThree: {
+    position: 'absolute',
+    left: '14%',
+    bottom: '18%',
+    width: 4,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#9CF02E',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+  },
+  portalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 14,
   },
-  previewGlow: {
-    position: 'absolute',
-    top: -50,
-    right: -20,
-    width: 260,
-    height: 220,
+  portalShell: {
+    flexGrow: 1,
+    flexBasis: 340,
+    minWidth: 0,
   },
-  previewHeader: {
+  portalCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    minHeight: 248,
+    padding: 20,
+    borderRadius: 28,
+    backgroundColor: 'rgba(12, 15, 12, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.18)',
+    gap: 14,
+  },
+  portalCardActive: {
+    borderColor: 'rgba(177, 255, 42, 0.55)',
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  portalGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.92,
+  },
+  portalTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
-  previewEyebrow: {
-    color: 'rgba(201, 233, 176, 0.7)',
-    fontSize: 11,
-    lineHeight: 14,
-    fontFamily: 'Sora_600SemiBold',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  previewTitle: {
-    marginTop: 5,
-    color: '#F3F7EF',
-    fontSize: 20,
-    lineHeight: 24,
-    fontFamily: 'Sora_700Bold',
-    letterSpacing: -0.2,
-  },
-  previewStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(156, 240, 46, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(156, 240, 46, 0.15)',
-  },
-  previewStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#9CF02E',
-    shadowColor: '#9CF02E',
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  previewStatusText: {
-    color: '#EAF8E4',
-    fontSize: 11,
-    fontFamily: 'Sora_700Bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.9,
-  },
-  previewCard: {
-    padding: 16,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    gap: 14,
-  },
-  previewCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  previewAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
+  portalIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#9CF02E',
@@ -786,182 +805,190 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
   },
-  previewCardLabel: {
-    color: 'rgba(193, 202, 186, 0.74)',
-    fontSize: 11,
-    lineHeight: 14,
-    fontFamily: 'Sora_500Medium',
-    textTransform: 'uppercase',
-    letterSpacing: 0.9,
-  },
-  previewCardTitle: {
-    marginTop: 4,
-    color: '#F3F7EF',
-    fontSize: 16,
-    lineHeight: 20,
-    fontFamily: 'Sora_700Bold',
-  },
-  previewChecks: {
-    gap: 8,
-  },
-  previewCheckRow: {
-    flexDirection: 'row',
+  portalArrow: {
+    width: 42,
+    height: 42,
+    borderRadius: 42,
     alignItems: 'center',
-    gap: 8,
-  },
-  previewCheckText: {
-    color: '#EAF8E4',
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: 'Sora_500Medium',
-  },
-  previewRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  previewMetric: {
-    flexGrow: 1,
-    flexBasis: 96,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(156, 240, 46, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(156, 240, 46, 0.12)',
   },
-  previewMetricValue: {
-    fontSize: 19,
-    lineHeight: 23,
+  portalTitle: {
+    color: '#F3F7EF',
+    fontSize: 24,
+    lineHeight: 28,
     fontFamily: 'Sora_800ExtraBold',
-    letterSpacing: -0.2,
+    letterSpacing: -0.4,
   },
-  previewMetricLabel: {
-    marginTop: 4,
-    color: 'rgba(193, 202, 186, 0.74)',
-    fontSize: 11,
-    lineHeight: 14,
-    fontFamily: 'Sora_500Medium',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  portalDescription: {
+    color: 'rgba(193, 202, 186, 0.82)',
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: 'Sora_400Regular',
+    maxWidth: 420,
   },
-  previewInsight: {
-    padding: 16,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    gap: 14,
+  portalList: {
+    gap: 10,
+    paddingTop: 4,
   },
-  previewInsightHeader: {
+  portalListItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    gap: 9,
   },
-  previewInsightTitle: {
-    color: '#F3F7EF',
-    fontSize: 14,
-    lineHeight: 18,
-    fontFamily: 'Sora_700Bold',
-  },
-  previewInsightValue: {
-    color: '#9CF02E',
-    fontSize: 11,
-    lineHeight: 14,
-    fontFamily: 'Sora_700Bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.9,
-  },
-  miniChart: {
-    height: 92,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingVertical: 2,
-  },
-  progressTrack: {
+  portalBullet: {
+    width: 8,
     height: 8,
-    borderRadius: 999,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  progressFill: {
-    height: '100%',
     borderRadius: 999,
     backgroundColor: '#9CF02E',
   },
-  chartBar: {
-    flex: 1,
-    borderRadius: 999,
-    backgroundColor: 'rgba(156, 240, 46, 0.84)',
-    shadowColor: '#9CF02E',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+  portalListText: {
+    color: '#EAF8E4',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Sora_600SemiBold',
   },
-  detailBand: {
+  benefitsRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  benefitChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 22,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  benefitChipText: {
+    color: '#EAF8E4',
+    fontSize: 12,
+    fontFamily: 'Sora_600SemiBold',
+  },
+  footerCard: {
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 22,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  footerQuote: {
+    color: '#F3F7EF',
+    fontSize: 17,
+    lineHeight: 24,
+    textAlign: 'center',
+    fontFamily: 'Sora_800ExtraBold',
+  },
+  footerText: {
+    color: 'rgba(193, 202, 186, 0.8)',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+    fontFamily: 'Sora_400Regular',
+  },
+  footerHeart: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    backgroundColor: 'rgba(156, 240, 46, 0.08)',
+  },
+  actionsRow: {
+    gap: 12,
+  },
+  actionShell: {
+    borderRadius: 18,
+  },
+  actionPressable: {
+    borderRadius: 18,
+  },
+  primaryAction: {
+    shadowColor: '#9CF02E',
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  secondaryAction: {
+    backgroundColor: 'rgba(18, 21, 18, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  primaryFill: {
+    minHeight: 58,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  primaryActionText: {
+    color: '#07110B',
+    fontSize: 15,
+    fontFamily: 'Sora_800ExtraBold',
+  },
+  secondaryFill: {
+    minHeight: 58,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  secondaryActionText: {
+    color: '#EEF4E7',
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+  },
+  linksRow: {
+    gap: 10,
+    paddingBottom: 4,
+  },
+  linksLabel: {
+    color: 'rgba(201, 233, 176, 0.72)',
+    fontSize: 11,
+    fontFamily: 'Sora_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    alignSelf: 'center',
+  },
+  linksWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  textLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 999,
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  detailRail: {
-    gap: 10,
-  },
-  detailItem: {
-    flex: 1,
-    gap: 4,
-  },
-  detailDivider: {
-    width: 1,
-    marginHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  detailLabel: {
-    color: 'rgba(193, 202, 186, 0.68)',
-    fontSize: 10,
-    lineHeight: 14,
-    fontFamily: 'Sora_600SemiBold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.9,
-  },
-  detailValue: {
-    color: '#F3F7EF',
-    fontSize: 13,
-    lineHeight: 18,
+  textLinkText: {
+    color: 'rgba(234, 248, 228, 0.82)',
+    fontSize: 11,
     fontFamily: 'Sora_600SemiBold',
   },
-  previewMicroCard: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 22,
-    backgroundColor: 'rgba(156, 240, 46, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(156, 240, 46, 0.12)',
-    gap: 8,
-  },
-  previewMicroHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  previewMicroTitle: {
-    flex: 1,
-    color: '#F3F7EF',
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: 'Sora_700Bold',
-  },
-  previewMicroText: {
-    color: 'rgba(193, 202, 186, 0.8)',
-    fontSize: 12,
-    lineHeight: 18,
-    fontFamily: 'Sora_400Regular',
+  pressedSoft: {
+    opacity: 0.94,
   },
 });

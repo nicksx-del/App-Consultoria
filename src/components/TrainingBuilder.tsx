@@ -91,6 +91,7 @@ const difficultyLabels: Record<WorkoutExercise['difficulty'], string> = {
 };
 
 const rirOptions = ['', '0', '1', '2', '3', '4+'];
+const repRangeOptions = ['5-9', '6-8', '8-10', '8-12', '10-12', '12-15'];
 const setTypeOptions: Array<{ id: WorkoutSetType; label: string; helper: string; icon: IconName }> = [
   { id: 'working', label: 'Valida', helper: 'Serie principal', icon: 'check' },
   { id: 'warmup', label: 'Aquecimento', helper: 'Preparar carga', icon: 'fire' },
@@ -102,7 +103,7 @@ const setTypeOptions: Array<{ id: WorkoutSetType; label: string; helper: string;
 const addExerciseInitialState: AddExerciseState = {
   name: '',
   sets: '3',
-  reps: '10-12',
+  reps: '8-12',
   primaryMuscle: 'chest',
 };
 
@@ -338,6 +339,7 @@ export function TrainingBuilder({
   const [substitutionTarget, setSubstitutionTarget] = useState<{ dayId: string; exerciseId: string } | null>(null);
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>('workout');
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
+  const [pendingRepRange, setPendingRepRange] = useState(addExerciseInitialState.reps);
   const [openSections, setOpenSections] = useState<Record<AccordionKey, boolean>>({
     workout: true,
     templates: true,
@@ -366,6 +368,7 @@ export function TrainingBuilder({
     ? findExercise(draft, substitutionTarget.dayId, substitutionTarget.exerciseId)
     : null;
   const canInteract = canEdit && !saving;
+  const activeDayRepRange = activeDay?.exercises[0]?.sets[0]?.reps ?? pendingRepRange;
 
   const toggleSection = (section: AccordionKey) => {
     setOpenSections((current) => ({
@@ -389,6 +392,25 @@ export function TrainingBuilder({
       ...current,
       workoutDays: current.workoutDays.map((dayItem) => (dayItem.id === dayId ? updater(dayItem) : dayItem)),
     }));
+  };
+
+  const applyRepRangeToDay = (dayId: string, repRange: string) => {
+    if (!canInteract) {
+      return;
+    }
+
+    setPendingRepRange(repRange);
+    updateWorkoutDay(dayId, (dayItem) => ({
+      ...dayItem,
+      exercises: dayItem.exercises.map((exerciseItem) => ({
+        ...exerciseItem,
+        sets: exerciseItem.sets.map((setItem) => ({
+          ...setItem,
+          reps: repRange,
+        })),
+      })),
+    }));
+    setNewExercise((current) => ({ ...current, reps: repRange }));
   };
 
   const updateExercise = (
@@ -451,6 +473,7 @@ export function TrainingBuilder({
     setExpandedExerciseId(null);
     setEditingExerciseId(null);
     setSubstitutionTarget(null);
+    setNewExercise((current) => ({ ...current, reps: pendingRepRange }));
     setAddExerciseOpen(true);
     setFeedback('Treino do zero criado no rascunho. Adicione os exercícios e salve quando finalizar.');
   };
@@ -543,7 +566,7 @@ export function TrainingBuilder({
     const nextExercise = createExerciseFromForm(
       newExercise.name,
       Number.isFinite(setCount) ? setCount : 3,
-      newExercise.reps,
+      newExercise.reps.trim() || activeDayRepRange,
       newExercise.primaryMuscle,
     );
 
@@ -552,6 +575,7 @@ export function TrainingBuilder({
       exercises: [...dayItem.exercises, nextExercise],
     }));
     setNewExercise(addExerciseInitialState);
+    setPendingRepRange(nextExercise.sets[0]?.reps ?? activeDayRepRange);
     setAddExerciseOpen(false);
     setEditingExerciseId(nextExercise.id);
     setExpandedExerciseId(nextExercise.id);
@@ -1116,6 +1140,24 @@ export function TrainingBuilder({
                   danger
                 />
               </View>
+
+              <View style={styles.repRangePanel}>
+                <View style={styles.repRangePanelHeader}>
+                  <Text style={styles.fieldLabel}>Faixa padrão de reps</Text>
+                  <Text style={styles.repRangeHelper}>{activeDayRepRange} por exercício</Text>
+                </View>
+                <View style={styles.chipWrap}>
+                  {repRangeOptions.map((repRange) => (
+                    <Chip
+                      key={repRange}
+                      label={repRange}
+                      active={activeDayRepRange === repRange}
+                      disabled={!canInteract}
+                      onPress={() => applyRepRangeToDay(activeDay.id, repRange)}
+                    />
+                  ))}
+                </View>
+              </View>
             </View>
 
             <View style={styles.exerciseList}>
@@ -1135,8 +1177,8 @@ export function TrainingBuilder({
                       <View style={styles.exerciseCopy}>
                         <Text style={styles.exerciseName}>{exerciseItem.name}</Text>
                         <Text style={styles.exerciseMeta}>
-                          {exerciseItem.sets.length} séries - {muscleLabels[exerciseItem.primaryMuscle]} -{' '}
-                          {difficultyLabels[exerciseItem.difficulty]}
+                          {exerciseItem.sets.length} séries · {exerciseItem.sets[0]?.reps ?? activeDayRepRange} ·{' '}
+                          {muscleLabels[exerciseItem.primaryMuscle]} · {difficultyLabels[exerciseItem.difficulty]}
                         </Text>
                       </View>
                       <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="#9CF02E" />
@@ -1556,7 +1598,10 @@ export function TrainingBuilder({
               </View>
             ) : (
               <Pressable
-                onPress={() => setAddExerciseOpen(true)}
+                onPress={() => {
+                  setNewExercise((current) => ({ ...current, reps: activeDayRepRange }));
+                  setAddExerciseOpen(true);
+                }}
                 disabled={!canInteract}
                 style={({ pressed }) => [
                   styles.addExerciseButton,
@@ -1649,8 +1694,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Sora_600SemiBold',
   },
   sectionCard: {
-    gap: 14,
-    padding: 14,
+    gap: 12,
+    padding: 12,
     borderRadius: 26,
     backgroundColor: 'rgba(8, 12, 8, 0.86)',
     borderWidth: 1,
@@ -1930,13 +1975,32 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Sora_600SemiBold',
   },
+  repRangePanel: {
+    gap: 8,
+    padding: 11,
+    borderRadius: 18,
+    backgroundColor: 'rgba(156, 240, 46, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+  },
+  repRangePanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  repRangeHelper: {
+    color: 'rgba(222, 236, 214, 0.58)',
+    fontSize: 10,
+    fontFamily: 'Sora_600SemiBold',
+  },
   fieldWrap: {
     flexGrow: 1,
     flexBasis: 160,
-    gap: 7,
+    gap: 6,
   },
   fieldWrapCompact: {
-    gap: 5,
+    gap: 4,
   },
   fieldLabel: {
     color: '#EAF8E4',
@@ -1975,12 +2039,12 @@ const styles = StyleSheet.create({
   twoColumns: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   chip: {
     minHeight: 36,
@@ -2007,7 +2071,7 @@ const styles = StyleSheet.create({
   setTypeSelectorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
+    gap: 6,
   },
   setTypeOption: {
     flexGrow: 1,
@@ -2134,10 +2198,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#9CF02E',
   },
   dayEditor: {
-    gap: 14,
+    gap: 12,
   },
   dayEditorTop: {
-    gap: 12,
+    gap: 10,
   },
   dayTitleFields: {
     flexDirection: 'row',
@@ -2150,11 +2214,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   exerciseList: {
-    gap: 12,
+    gap: 10,
   },
   exerciseCard: {
-    gap: 12,
-    padding: 12,
+    gap: 10,
+    padding: 10,
     borderRadius: 23,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
@@ -2251,20 +2315,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Sora_800ExtraBold',
   },
   exerciseEditor: {
-    gap: 12,
-    padding: 11,
-    borderRadius: 19,
+    gap: 10,
+    padding: 10,
+    borderRadius: 18,
     backgroundColor: 'rgba(0, 0, 0, 0.22)',
     borderWidth: 1,
     borderColor: 'rgba(156, 240, 46, 0.13)',
   },
   seriesList: {
-    gap: 10,
+    gap: 8,
   },
   seriesCard: {
-    gap: 9,
-    padding: 10,
-    borderRadius: 17,
+    gap: 8,
+    padding: 9,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.035)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.07)',
@@ -2389,8 +2453,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Sora_600SemiBold',
   },
   addExerciseBox: {
-    gap: 12,
-    padding: 13,
+    gap: 10,
+    padding: 12,
     borderRadius: 22,
     backgroundColor: 'rgba(156, 240, 46, 0.06)',
     borderWidth: 1,

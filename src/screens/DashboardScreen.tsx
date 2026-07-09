@@ -180,6 +180,7 @@ type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 type WorkspaceSection = 'overview' | 'students' | 'notifications' | 'payments' | 'ia';
 type StudentFormMode = 'create' | 'edit';
 const ANAMNESIS_DISMISS_STORAGE_KEY = 'consultoria:anamnesis-dismissed:';
+const STUDENT_WORKSPACE_STATE_STORAGE_KEY = 'consultoria:student-workspace-state';
 
 type BottomTab = {
   id: WorkspaceSection | 'more';
@@ -592,6 +593,45 @@ function getNutritionPreview(plan: StudentNutritionPlan | null, fallbackPlan: St
 
 function getStudentTabMeta(tab: StudentProfileTab) {
   return studentProfileTabs.find((item) => item.id === tab) ?? studentProfileTabs[0];
+}
+
+type StudentWorkspaceState = {
+  activeSection?: WorkspaceSection;
+  studentId?: string | null;
+  studentProfileTab?: StudentProfileTab;
+};
+
+async function loadStudentWorkspaceState() {
+  try {
+    const raw = await AsyncStorage.getItem(STUDENT_WORKSPACE_STATE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as StudentWorkspaceState | null;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    return {
+      activeSection: parsed.activeSection,
+      studentId: typeof parsed.studentId === 'string' ? parsed.studentId : null,
+      studentProfileTab:
+        parsed.studentProfileTab && studentProfileTabs.some((tab) => tab.id === parsed.studentProfileTab)
+          ? parsed.studentProfileTab
+          : undefined,
+    } satisfies StudentWorkspaceState;
+  } catch {
+    return null;
+  }
+}
+
+async function saveStudentWorkspaceState(state: StudentWorkspaceState) {
+  try {
+    await AsyncStorage.setItem(STUDENT_WORKSPACE_STATE_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Best-effort persistence only.
+  }
 }
 
 function translateStudentError(error: unknown) {
@@ -2361,6 +2401,25 @@ function StudentProfilePage({
   const showProfileContextCard = isTrainerView && normalizedTab !== 'summary';
   const trainingPreview = getTrainingPreview(trainingPlan, buildDefaultTrainingPlan(student));
   const nutritionPreview = getNutritionPreview(nutritionPlan, buildDefaultNutritionPlan(student));
+  const nutritionBuilderErrorMessage = (() => {
+    const message = nutritionError || nutritionLibraryError;
+    if (!message) {
+      return null;
+    }
+
+    const lowerMessage = message.toLowerCase();
+    const hasFallbackData = Boolean(nutritionPlan || nutritionLibrary.length);
+    const isFallbackOnlyIssue =
+      lowerMessage === 'nao foi possivel concluir a operacao agora.' ||
+      lowerMessage.includes('nutrition_food_library') ||
+      lowerMessage.includes('student_nutrition_plans');
+
+    if (hasFallbackData && isFallbackOnlyIssue) {
+      return null;
+    }
+
+    return message;
+  })();
 
   return (
     <View style={styles.pageStack}>
@@ -2598,7 +2657,7 @@ function StudentProfilePage({
                 studentGoal={student.goal}
                 loading={nutritionLoading}
                 saving={nutritionSaving || nutritionLibrarySaving}
-                errorMessage={nutritionError || nutritionLibraryError}
+                errorMessage={nutritionBuilderErrorMessage}
                 canEdit={canEdit}
                 mealLogs={mealLogs}
                 mealLogDate={mealLogDate}
@@ -3194,6 +3253,7 @@ export function DashboardScreen({
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<StudentFormMode | null>(null);
+  const [studentWorkspaceState, setStudentWorkspaceState] = useState<StudentWorkspaceState | null>(null);
   const { width } = useWindowDimensions();
   const isDesktopLayout = Platform.OS === 'web' && width >= 1240;
   const isDemoMode =
@@ -3221,7 +3281,7 @@ export function DashboardScreen({
       return entryA.student.full_name.localeCompare(entryB.student.full_name);
     });
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>({ ...defaultPaymentConfig });
-  const isInsideStudentProfile = Boolean(selectedStudent) || (!isTrainer && Boolean(ownStudent));
+  const isInsideStudentProfile = isTrainer ? activeSection === 'students' && Boolean(selectedStudent) : Boolean(ownStudent);
   const isStudentTabInMore = !primaryStudentTabs.some((tab) => tab.tab === studentProfileTab);
   const profileStudent = isTrainer ? selectedStudent : ownStudent;
   const desktopRailTabs: DesktopRailItem[] = isInsideStudentProfile
@@ -3234,6 +3294,60 @@ export function DashboardScreen({
       ? `${profileStudent.full_name} com resumo, treino, dieta, check-ins e chat em uma navegação lateral fixa.`
       : 'Abra um aluno para ver o perfil detalhado em tela larga.'
     : 'Atalhos visuais para navegar entre alunos, notificações, pagamento e IA sem abrir menus compactos.';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadStudentWorkspaceState().then((state) => {
+      if (!cancelled) {
+        setStudentWorkspaceState(state);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.id, consultancy?.id, isTrainer]);
+
+  useEffect(() => {
+    if (!studentWorkspaceState || !isTrainer) {
+      return;
+    }
+
+    const restoredStudent = studentWorkspaceState.studentId
+      ? students.find((student) => student.id === studentWorkspaceState.studentId) ?? null
+      : null;
+
+    if (studentWorkspaceState.studentId && !restoredStudent) {
+      return;
+    }
+
+    if (studentWorkspaceState.activeSection) {
+      setActiveSection(studentWorkspaceState.activeSection);
+    }
+
+    if (studentWorkspaceState.studentProfileTab) {
+      setStudentProfileTab(studentWorkspaceState.studentProfileTab);
+    }
+
+    if (restoredStudent) {
+      setSelectedStudent(restoredStudent);
+    }
+
+    setStudentWorkspaceState(null);
+  }, [studentWorkspaceState, students, isTrainer]);
+
+  useEffect(() => {
+    if (!isTrainer) {
+      return;
+    }
+
+    void saveStudentWorkspaceState({
+      activeSection,
+      studentId: selectedStudent?.id ?? null,
+      studentProfileTab,
+    });
+  }, [activeSection, selectedStudent?.id, studentProfileTab, isTrainer]);
 
   const demoStudent: Student = {
     id: 'demo-student',
@@ -4274,10 +4388,6 @@ export function DashboardScreen({
     setActiveSection(section);
     setShowMoreTabs(false);
     setShowStudentMoreTabs(false);
-
-    if (section !== 'students') {
-      setSelectedStudent(null);
-    }
   };
 
   const handleClearNotifications = () => {
