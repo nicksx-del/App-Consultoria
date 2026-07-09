@@ -102,6 +102,26 @@ function ActionButton({
   onPress: () => void;
 }) {
   const { scale, animateTo } = useHoverScale();
+function RolePill({ label, helper, icon, onPress }: RolePillProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.rolePill, pressed && styles.pressedSoft]}
+    >
+      <View style={styles.roleIconShell}>
+        <MaterialCommunityIcons name={icon} size={18} color="#9CF02E" />
+      </View>
+      <View style={styles.roleCopy}>
+        <Text style={styles.roleLabel}>{label}</Text>
+        <Text style={styles.roleHelper}>{helper}</Text>
+      </View>
+      <Feather name="chevron-right" size={16} color="rgba(243, 247, 239, 0.7)" />
+    </Pressable>
+  );
+}
+
+function ActionButton({ label, icon, variant, onPress }: ActionButtonProps) {
+  const { scale, animateTo } = useAnimatedScale();
   const isPrimary = variant === 'primary';
 
   return (
@@ -397,62 +417,43 @@ export function HomeScreen({ onLoginPress, onSignupPress }: HomeScreenProps) {
                 logoShellStyle={styles.brandLogoShell}
               />
 
-              <ActionButton
-                label="Ajuda"
-                icon="help-circle-outline"
-                variant="secondary"
-                onPress={() => onLoginPress('trainer')}
-              />
-            </View>
+              <View style={styles.heroCopy}>
+                <View style={styles.badge}>
+                  <Feather name="zap" size={12} color="#9CF02E" />
+                  <Text style={styles.badgeText}>Experiência premium para treinador e aluno</Text>
+                </View>
 
-            <View style={styles.heroCopyBlock}>
-              <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>
-                Mais que um app.{'\n'}
-                Seu parceiro na <Text style={styles.heroAccent}>evolução.</Text>
-              </Text>
-              <Text style={[styles.heroSubtitle, compact && styles.heroSubtitleCompact]}>
-                Treinos inteligentes para treinadores e alunos.
-              </Text>
-            </View>
+                <Text style={styles.title}>Treino, dieta e acompanhamento em um só lugar.</Text>
+                <Text style={styles.subtitle}>
+                  Escolha seu perfil e siga direto para uma experiência feita para uso diário,
+                  clara e profissional.
+                </Text>
+              </View>
 
-            <FittoHero message={fittoCaption} compact={compact} />
+              <View style={styles.rolesRow}>
+                <RolePill
+                  label="Sou treinador"
+                  helper="Criar treinos, dieta e acompanhar alunos"
+                  icon="account-tie-outline"
+                  onPress={() => onLoginPress('trainer')}
+                />
+                <RolePill
+                  label="Sou aluno"
+                  helper="Ver treino, dieta e check-ins do dia"
+                  icon="account-outline"
+                  onPress={() => onLoginPress('student')}
+                />
+              </View>
 
-            <View style={styles.portalGrid}>
-              <PortalCard
-                title="Sou treinador"
-                description="Crie treinos personalizados. Gerencie alunos. Acompanhe evolução."
-                icon="dumbbell"
-                bullets={['Criar treinos personalizados', 'Gerenciar alunos', 'Acompanhar evolução']}
-                onPress={() => onLoginPress('trainer')}
-                onHoverState={setFittoMood}
-                active={fittoMood === 'trainer'}
-              />
-              <PortalCard
-                title="Sou aluno"
-                description="Execute treinos. Registre cargas. Acompanhe resultados."
-                icon="account-outline"
-                bullets={['Executar treinos', 'Registrar cargas', 'Acompanhar resultados']}
-                onPress={() => onLoginPress('student')}
-                onHoverState={setFittoMood}
-                active={fittoMood === 'student'}
-              />
-            </View>
-
-            <View style={styles.benefitsRow}>
-              <BenefitChip icon="flash-outline" label="Fluxo rápido" />
-              <BenefitChip icon="cellphone" label="100% Mobile" />
-              <BenefitChip icon="shield-check-outline" label="Seguro e confiável" />
-              <BenefitChip icon="chart-line" label="Resultados reais" />
-              <BenefitChip icon="heart-outline" label="Pensado para você" />
-            </View>
-
-            <View style={styles.footerCard}>
-              <Text style={styles.footerQuote}>
-                "Constância transforma. Disciplina constrói."
-              </Text>
-              <Text style={styles.footerText}>Evolua todos os dias com o Fitto ao seu lado.</Text>
-              <View style={styles.footerHeart}>
-                <Feather name="heart" size={14} color="#9CF02E" />
+              <View style={styles.featureList}>
+                {features.map((item) => (
+                  <FeatureCard
+                    key={item.title}
+                    icon={item.icon}
+                    title={item.title}
+                    description={item.description}
+                  />
+                ))}
               </View>
             </View>
 
@@ -832,6 +833,49 @@ const styles = StyleSheet.create({
   portalList: {
     gap: 10,
     paddingTop: 4,
+  rolesRow: {
+    width: '100%',
+    gap: 10,
+  },
+  rolePill: {
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(22, 26, 18, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(146, 255, 68, 0.16)',
+  },
+  roleIconShell: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(156, 240, 46, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 240, 46, 0.12)',
+  },
+  roleCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  roleLabel: {
+    color: '#F3F7EF',
+    fontSize: 15,
+    fontFamily: 'Sora_700Bold',
+  },
+  roleHelper: {
+    color: 'rgba(193, 202, 186, 0.74)',
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: 'Sora_400Regular',
+  },
+  featureList: {
+    gap: 12,
   },
   portalListItem: {
     flexDirection: 'row',
